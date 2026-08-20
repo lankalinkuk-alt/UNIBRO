@@ -24,8 +24,10 @@ import {
   Play,
   Server,
   Zap,
-  Info
+  Info,
+  FileText
 } from "lucide-react";
+import { openTamilBiometricGuidePrintWindow } from "../utils/helpPdfGenerator";
 import {
   BiometricDevice,
   BiometricUserMapping,
@@ -387,6 +389,15 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              id="btn_tamil_bio_guide_pdf"
+              onClick={openTamilBiometricGuidePrintWindow}
+              className="px-4 py-2.5 rounded-xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 font-bold text-sm transition shadow-xs flex items-center gap-2"
+              title="ஹிக்விஷன் கைரேகை இயந்திர இணைப்பு கையேடு PDF"
+            >
+              <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>தமிழ் PDF வழிகாட்டி</span>
+            </button>
             <button
               id="btn_refresh_biometric"
               onClick={fetchData}

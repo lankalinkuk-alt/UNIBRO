@@ -85,225 +85,28 @@ const initialData: DBData = {
       no_pay_deduction_rate: 0
     }
   ],
-  employees: [
-    {
-      id: "emp-1",
-      employee_number: "NL-001",
-      full_name_en: "Kumari Perera",
-      full_name_ta: "குமாரி பெரேரா",
-      full_name_si: "කුමාරි පෙරේරා",
-      nic: "885522334V",
-      department: "Production",
-      designation: "Senior Supervisor",
-      join_date: "2023-01-15",
-      employment_status: "Active",
-      epf_enabled: true,
-      etf_enabled: true,
-      ot_eligible: true,
-      salary_scheme_id: "sch-1",
-      bank_name: "Commercial Bank",
-      bank_branch: "Colombo 03",
-      bank_account_number: "8012345678",
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "emp-2",
-      employee_number: "NL-002",
-      full_name_en: "Anura Bandara",
-      full_name_ta: " அனுரா பண்டார",
-      full_name_si: "අනුර බණ්ඩාර",
-      nic: "902233445V",
-      department: "Warehouse",
-      designation: "Store Keeper",
-      join_date: "2023-06-01",
-      employment_status: "Active",
-      epf_enabled: true,
-      etf_enabled: true,
-      ot_eligible: true,
-      salary_scheme_id: "sch-1",
-      bank_name: "BOC",
-      bank_branch: "Kandy",
-      bank_account_number: "1023456789",
-      created_at: new Date().toISOString()
-    },
-    {
-      id: "emp-3",
-      employee_number: "NL-003",
-      full_name_en: "Fatima Mohamed",
-      full_name_ta: "பாத்திமா மொகமட்",
-      full_name_si: "ෆාතිමා මොහොමඩ්",
-      nic: "956677889V",
-      department: "Sales & Admin",
-      designation: "Executive Assistant",
-      join_date: "2024-02-10",
-      employment_status: "Active",
-      epf_enabled: true,
-      etf_enabled: true,
-      ot_eligible: false,
-      salary_scheme_id: "sch-2",
-      bank_name: "Hatton National Bank",
-      bank_branch: "Galle",
-      bank_account_number: "4056789123",
-      created_at: new Date().toISOString()
-    }
-  ],
-  attendance: [
-    { id: "att-1", employee_id: "emp-1", month: "2026-08", working_days: 25, days_attended: 24, no_pay_leave_days: 1, paid_leave_days: 0 },
-    { id: "att-2", employee_id: "emp-2", month: "2026-08", working_days: 25, days_attended: 25, no_pay_leave_days: 0, paid_leave_days: 0 },
-    { id: "att-3", employee_id: "emp-3", month: "2026-08", working_days: 25, days_attended: 23, no_pay_leave_days: 2, paid_leave_days: 0 }
-  ],
-  leave_records: [
-    { id: "lr-1", employee_id: "emp-3", start_date: "2026-08-13", end_date: "2026-08-13", leave_type: "Annual Leave", status: "Approved" }
-  ],
-  overtime_entries: [
-    { id: "ot-1", employee_id: "emp-1", month: "2026-08", normal_ot_hours: 10, off_day_ot_hours: 4, poya_ot_hours: 2 },
-    { id: "ot-2", employee_id: "emp-2", month: "2026-08", normal_ot_hours: 15, off_day_ot_hours: 5, poya_ot_hours: 0 },
-    { id: "ot-3", employee_id: "emp-3", month: "2026-08", normal_ot_hours: 0, off_day_ot_hours: 0, poya_ot_hours: 0 }
-  ],
-  incentive_entries: [
-    { id: "inc-1", employee_id: "emp-1", month: "2026-08", target_achieved_pct: 100, incentive_amount: 5000, notes: "Manufacturing target met" },
-    { id: "inc-2", employee_id: "emp-2", month: "2026-08", target_achieved_pct: 90, incentive_amount: 4500, notes: "Good logistics output" },
-    { id: "inc-3", employee_id: "emp-3", month: "2026-08", target_achieved_pct: 100, incentive_amount: 7500, notes: "Sales target fully achieved" }
-  ],
-  seasonal_incentive_rules: [
-    {
-      id: "sir-1",
-      name: "New Year Production Peak Incentive",
-      incentive_type: "Production",
-      department: "Production",
-      employee_group: "All",
-      start_date: "2026-04-01",
-      end_date: "2026-04-30",
-      is_active: true,
-      fixed_bonus: 2000,
-      attendance_requirement: 22,
-      min_working_days: 20,
-      min_production: 10000,
-      min_sales: 0,
-      priority: 1,
-      slabs: [
-        { id: "slb-1", min_val: 10000, max_val: 11999, bonus_val: 2000, bonus_type: "fixed" },
-        { id: "slb-2", min_val: 12000, max_val: 14999, bonus_val: 4000, bonus_type: "fixed" },
-        { id: "slb-3", min_val: 15000, max_val: 999999, bonus_val: 6000, bonus_type: "fixed" }
-      ]
-    }
-  ],
-  special_ot_rules: [
-    {
-      id: "sot-1",
-      name: "August Peak Season OT Campaign",
-      start_date: "2026-08-01",
-      end_date: "2026-08-31",
-      from_time: "00:00",
-      to_time: "23:59",
-      ot_multiplier: 1.75,
-      ot_type: "all",
-      department: "All",
-      employee_group: "All",
-      priority: 1,
-      is_active: true
-    }
-  ],
-  production_entries: [
-    { id: "prod-1", employee_id: "emp-1", month: "2026-08", units_produced: 13500 },
-    { id: "prod-2", employee_id: "emp-2", month: "2026-08", units_produced: 9500 }
-  ],
-  sales_entries: [
-    { id: "sale-1", employee_id: "emp-3", month: "2026-08", sales_amount: 850000 }
-  ],
-  daily_production_entries: [
-    { id: "dprod-1", employee_id: "emp-1", date: "2026-08-01", units_produced: 4500 },
-    { id: "dprod-2", employee_id: "emp-1", date: "2026-08-02", units_produced: 4500 },
-    { id: "dprod-3", employee_id: "emp-1", date: "2026-08-03", units_produced: 4500 },
-    { id: "dprod-4", employee_id: "emp-2", date: "2026-08-01", units_produced: 4750 },
-    { id: "dprod-5", employee_id: "emp-2", date: "2026-08-02", units_produced: 4750 }
-  ],
-  daily_sales_entries: [
-    { id: "dsale-1", employee_id: "emp-3", date: "2026-08-01", sales_amount: 425000 },
-    { id: "dsale-2", employee_id: "emp-3", date: "2026-08-02", sales_amount: 425000 }
-  ],
-  work_schedules: [
-    {
-      id: "sch-day",
-      name: "Standard Day Shift (08:00 - 17:00)",
-      shift_type: "Day",
-      working_days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-      start_time: "08:00",
-      end_time: "17:00",
-      total_working_hours: 8,
-      break_start: "12:00",
-      break_end: "13:00",
-      break_paid: true,
-      crosses_midnight: false,
-      grace_period_mins: 15,
-      mark_late_after_grace: true,
-      deduct_for_late: true,
-      late_deduction_method: "per_minute",
-      late_deduction_amount: 100,
-      half_day_min_hours: 4,
-      absent_min_hours: 2,
-      ot_start_after_end: true,
-      min_ot_mins: 30,
-      ot_rounding_mins: 15,
-      normal_ot_rate: 350,
-      off_day_ot_rate: 500,
-      holiday_ot_rate: 750,
-      night_ot_rate: 600
-    },
-    {
-      id: "sch-night",
-      name: "Night Production Shift (20:00 - 05:00)",
-      shift_type: "Night",
-      working_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-      start_time: "20:00",
-      end_time: "05:00",
-      total_working_hours: 8,
-      break_start: "00:00",
-      break_end: "01:00",
-      break_paid: true,
-      crosses_midnight: true,
-      grace_period_mins: 15,
-      mark_late_after_grace: true,
-      deduct_for_late: true,
-      late_deduction_method: "per_minute",
-      late_deduction_amount: 120,
-      half_day_min_hours: 4,
-      absent_min_hours: 2,
-      ot_start_after_end: true,
-      min_ot_mins: 30,
-      ot_rounding_mins: 15,
-      normal_ot_rate: 450,
-      off_day_ot_rate: 600,
-      holiday_ot_rate: 900,
-      night_ot_rate: 750
-    }
-  ],
-  employee_schedule_assignments: [
-    {
-      id: "asg-1",
-      schedule_id: "sch-day",
-      target_type: "department",
-      target_id: "Production",
-      effective_from: "2026-08-01"
-    },
-    {
-      id: "asg-2",
-      schedule_id: "sch-night",
-      target_type: "department",
-      target_id: "Warehouse",
-      effective_from: "2026-08-01"
-    }
-  ],
+  employees: [],
+  attendance: [],
+  leave_records: [],
+  overtime_entries: [],
+  incentive_entries: [],
+  seasonal_incentive_rules: [],
+  special_ot_rules: [],
+  production_entries: [],
+  sales_entries: [],
+  daily_production_entries: [],
+  daily_sales_entries: [],
+  work_schedules: [],
+  employee_schedule_assignments: [],
   payroll_runs: [],
   payroll_items: [],
-  daily_attendance: [
-    { id: "da-1", employee_id: "emp-1", date: "2026-08-13", check_in_time: "08:15", status: "Present" },
-    { id: "da-2", employee_id: "emp-2", date: "2026-08-13", check_in_time: "08:45", status: "Late" }
-  ],
-  daily_overtime: [
-    { id: "dot-1", employee_id: "emp-1", date: "2026-08-13", ot_hours: 2.0 },
-    { id: "dot-2", employee_id: "emp-2", date: "2026-08-13", ot_hours: 1.5 }
-  ],
+  daily_attendance: [],
+  daily_overtime: [],
+  biometric_devices: [],
+  biometric_user_mappings: [],
+  biometric_attendance_logs: [],
+  epf_etf_payments: [],
+  audit_logs: [],
   company_settings: {
     company_name: "UNIBRO SMART APPARELS (PVT) LTD",
     company_address: "No. 45, Galle Road, Colombo 03, Sri Lanka",

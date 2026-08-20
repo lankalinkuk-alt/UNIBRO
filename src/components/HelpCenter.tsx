@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language, UserRole, HelpArticle, HelpCategoryId } from '../types';
 import { helpCategories, helpArticles } from '../data/helpArticlesData';
-import { generateUserManualPDF } from '../utils/helpPdfGenerator';
+import { generateUserManualPDF, openTamilBiometricGuidePrintWindow } from '../utils/helpPdfGenerator';
 import { HelpMockup } from './HelpMockups';
 import { OnboardingTour } from './OnboardingTour';
 import { VisualTamilUserGuide } from './VisualTamilUserGuide';
@@ -644,6 +644,15 @@ export const HelpCenter: React.FC<HelpCenterProps> = ({
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                    <button
+                      onClick={openTamilBiometricGuidePrintWindow}
+                      className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs transition shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
+                      title="Hikvision கைரேகை இயந்திர இணைப்பு கையேடு PDF"
+                    >
+                      <Fingerprint className="w-3.5 h-3.5" />
+                      <span>கைரேகை PDF வழிகாட்டி</span>
+                    </button>
+
                     <button
                       onClick={() => handleDownloadManual('en')}
                       disabled={generatingPdf}

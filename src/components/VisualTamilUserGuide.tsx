@@ -25,6 +25,7 @@ import {
   Calendar,
   DollarSign
 } from 'lucide-react';
+import { openTamilBiometricGuidePrintWindow } from '../utils/helpPdfGenerator';
 
 interface VisualTamilUserGuideProps {
   onNavigateToModule?: (view: 'dashboard' | 'employees' | 'salary-schemes' | 'run-payroll' | 'epf-etf' | 'config') => void;
@@ -618,12 +619,21 @@ export const VisualTamilUserGuide: React.FC<VisualTamilUserGuideProps> = ({
               
               {/* Illustrated Biometric & Attendance Flow */}
               <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 rounded-2xl p-6 text-white shadow-md">
-                <h3 className="text-lg font-black text-emerald-300 flex items-center mb-3">
-                  <Fingerprint className="w-5 h-5 mr-2 text-emerald-400" />
-                  கைரேகை இயந்திரம் & வருகை பதிவு வரைபடம் (Biometric Sync Workflow)
-                </h3>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-3">
+                  <h3 className="text-lg font-black text-emerald-300 flex items-center">
+                    <Fingerprint className="w-5 h-5 mr-2 text-emerald-400" />
+                    கைரேகை இயந்திரம் & வருகை பதிவு வரைபடம் (Biometric Sync Workflow)
+                  </h3>
+                  <button
+                    onClick={openTamilBiometricGuidePrintWindow}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs shadow-md transition"
+                  >
+                    <FileText className="w-4 h-4" />
+                    PDF கையேட்டை பதிவிறக்குக / அச்சிடுக
+                  </button>
+                </div>
                 <p className="text-xs text-stone-300 mb-5 max-w-2xl leading-relaxed">
-                  Hikvision கைரேகை இயந்திரத்திலிருந்து ஒரு கிளிக் மூலம் அனைத்து ஊழியர்களின் வருகை மற்றும் புறப்பாடு பதிவுகளை நவா லேடி கணினிக்கு மாற்றும் முறை.
+                  Hikvision கைரேகை இயந்திரத்திலிருந்து ஒரு கிளிக் மூலம் அனைத்து ஊழியர்களின் வருகை மற்றும் புறப்பாடு பதிவுகளை UNIBRO SMART APPARELS கணினிக்கு மாற்றும் முறை.
                 </p>
 
                 {/* 3 Step Visual Path with Flow Connectors */}

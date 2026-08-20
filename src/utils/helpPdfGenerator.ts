@@ -342,3 +342,401 @@ export const generateUserManualPDF = (language: Language = 'en') => {
   const filename = `UNIBRO-SMART-APPARELS-HRM-Manual-${language.toUpperCase()}-v4.8.2.pdf`;
   doc.save(filename);
 };
+
+export const openTamilBiometricGuidePrintWindow = () => {
+  const printWindow = window.open('', '_blank');
+  if (!printWindow) {
+    alert('Please allow popups to open the Tamil Biometric Connection Guide.');
+    return;
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="ta">
+<head>
+  <meta charset="UTF-8">
+  <title>Hikvision கைரேகை இயந்திர இணைப்பு கையேடு - UNIBRO SMART APPARELS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Mukta+Malar:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Mukta Malar', 'Plus Jakarta Sans', sans-serif;
+      background-color: #f8fafc;
+      color: #1e293b;
+      padding: 24px;
+      line-height: 1.6;
+    }
+    .page-container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 16px;
+      padding: 36px 44px;
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+    }
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+      color: #ffffff;
+      padding: 24px 30px;
+      border-radius: 12px;
+      margin-bottom: 28px;
+      border-bottom: 4px solid #10b981;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #10b981;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 20px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    h1 {
+      font-size: 22px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 6px;
+      line-height: 1.3;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0f172a;
+      border-left: 4px solid #4f46e5;
+      padding-left: 12px;
+      margin-top: 28px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .step-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      background: #4f46e5;
+      color: #ffffff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+    .step-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e1b4b;
+    }
+    .step-body {
+      font-size: 13px;
+      color: #334155;
+      margin-left: 40px;
+    }
+    .code-box {
+      background: #0f172a;
+      color: #38bdf8;
+      font-family: monospace;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      margin-top: 8px;
+      display: inline-block;
+    }
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12.5px;
+    }
+    .info-table th {
+      background: #f1f5f9;
+      color: #334155;
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 700;
+      border: 1px solid #cbd5e1;
+    }
+    .info-table td {
+      padding: 8px 12px;
+      border: 1px solid #e2e8f0;
+      color: #1e293b;
+    }
+    .pro-tip {
+      background: #fefce8;
+      border: 1px solid #fde047;
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: #854d0e;
+      font-size: 12.5px;
+      margin: 18px 0;
+    }
+    .warning-box {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 14px 18px;
+      color: #991b1b;
+      font-size: 12.5px;
+      margin: 18px 0;
+    }
+    .btn-bar {
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+    .btn-action {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      border: none;
+      transition: 0.2s;
+    }
+    .btn-print {
+      background: #059669;
+      color: #ffffff;
+    }
+    .btn-print:hover {
+      background: #047857;
+    }
+    .btn-close {
+      background: #64748b;
+      color: #ffffff;
+    }
+    .footer {
+      margin-top: 30px;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      color: #64748b;
+      font-size: 11px;
+    }
+    @media print {
+      body {
+        padding: 0;
+        background: #ffffff;
+      }
+      .page-container {
+        border: none;
+        padding: 10px;
+        box-shadow: none;
+        max-width: 100%;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .step-card {
+        break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print btn-bar">
+    <button class="btn-action btn-print" onclick="window.print()">🖨️ Print / Save as PDF (அச்சிடு / PDF சேமி)</button>
+    <button class="btn-action btn-close" onclick="window.close()">மூடு (Close)</button>
+  </div>
+
+  <div class="page-container">
+    <div class="header-banner">
+      <span class="badge">ஹார்ட்வேர் இணைப்பு வழிகாட்டி</span>
+      <h1>ஹிக்விஷன் (Hikvision DS-K1A8503MF) கைரேகை இயந்திர இணைப்பு கையேடு</h1>
+      <p class="subtitle">UNIBRO SMART APPARELS (PVT) LTD • HRM & Attendance Synchronization Standard Operating Procedure</p>
+    </div>
+
+    <div class="section-title">
+      <span>1. வன்பொருள் & நெட்வொர்க் அமைப்பு (Hardware & LAN Setup)</span>
+    </div>
+    
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">1</div>
+        <div class="step-title">LAN கேபிள் இணைப்பு (Ethernet Cable Connection)</div>
+      </div>
+      <div class="step-body">
+        <p>Hikvision DS-K1A8503MF கைரேகை இயந்திரத்தின் பின்புறம் உள்ள <strong>RJ-45 LAN Port</strong> இல் Cat-6 ஈத்தர்நெட் கேபிளை இணைக்கவும். மற்றொரு முனையை தொழிற்சாலை <strong>Router / Switch</strong> அல்லது வரவேற்பு கணினியுடன் இணைக்கவும்.</p>
+        <div class="code-box">இயந்திர இயல்புநிலை போர்ட் (Port): 80 (HTTP ISAPI) | 12V 1.5A DC Power</div>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">2</div>
+        <div class="step-title">கைரேகை இயந்திரத்தில் Static IP முகவரியை அமைத்தல்</div>
+      </div>
+      <div class="step-body">
+        <p>இயந்திரத்தின் மெனு பொத்தானை அழுத்தி நிர்வாகி கடவுச்சொல் மூலம் நுழையவும்:</p>
+        <p style="margin-top:6px;"><strong>Menu ➔ Comm. (தொடர்பு) ➔ Network (பிணையம்) ➔ TCP/IP</strong></p>
+        <table class="info-table">
+          <tr>
+            <th>அமைப்பு (Parameter)</th>
+            <th>பரிந்துரைக்கப்படும் மதிப்பு (Recommended Value)</th>
+          </tr>
+          <tr>
+            <td>DHCP</td>
+            <td><strong>Disabled (முடக்கப்பட்டுள்ளது)</strong> - Static IP கட்டாயம்</td>
+          </tr>
+          <tr>
+            <td>IP Address</td>
+            <td><strong>192.168.1.201</strong> (தொழிற்சாலை LAN எல்லைக்குள்)</td>
+          </tr>
+          <tr>
+            <td>Subnet Mask</td>
+            <td><strong>255.255.255.0</strong></td>
+          </tr>
+          <tr>
+            <td>Default Gateway</td>
+            <td><strong>192.168.1.1</strong></td>
+          </tr>
+          <tr>
+            <td>Server Port</td>
+            <td><strong>80</strong></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>2. UNIBRO HRM மென்பொருளில் இயந்திரத்தை இணைத்தல் (HRM System Setup)</span>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">3</div>
+        <div class="step-title">HRM மென்பொருளில் சாதனத்தை பதிவு செய்தல் (Add Device)</div>
+      </div>
+      <div class="step-body">
+        <p>1. UNIBRO HRM இல் <strong>Configuration (கட்டமைப்பு) ➔ Biometric Devices (கைரேகை சாதனங்கள்)</strong> பகுதிக்குச் செல்லவும்.</p>
+        <p>2. <strong>"Add Device" (சாதனம் சேர்)</strong> பொத்தானை அழுத்தவும்.</p>
+        <p>3. பின்வரும் விபரங்களை உள்ளிடவும்:</p>
+        <ul style="margin-left: 20px; margin-top: 6px;">
+          <li><strong>Device Name:</strong> Factory Main Entrance - DS-K1A8503MF</li>
+          <li><strong>Brand / Model:</strong> Hikvision / DS-K1A8503MF</li>
+          <li><strong>IP Address:</strong> 192.168.1.201</li>
+          <li><strong>Port:</strong> 80</li>
+          <li><strong>Username:</strong> admin</li>
+          <li><strong>Password:</strong> இயந்திரத்தின் நிர்வாகி கடவுச்சொல் (எ.கா: Password123#)</li>
+          <li><strong>Time Zone:</strong> Asia/Colombo (UTC+05:30)</li>
+        </ul>
+        <p style="margin-top:8px;">4. <strong>"Test Connection" (இணைப்பை பரிசோதி)</strong> பொத்தானை அழுத்தி <em>"Terminal Online (Ping OK)"</em> என்று வருகிறதா என சரிபார்க்கவும்.</p>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">4</div>
+        <div class="step-title">ஊழியர் கைரேகை ID பொருத்துதல் (Employee ID Mapping)</div>
+      </div>
+      <div class="step-body">
+        <p>1. இயந்திரத்தில் ஊழியரின் கைரேகையை பதிவு செய்யும் போது அவருக்கு ஒரு <strong>User ID</strong> (எ.கா: 101, 102, 103) வழங்கப்படும்.</p>
+        <p>2. HRM இல் <strong>"Employee Mapping" (ஊழியர் பொருத்துதல்)</strong> பகுதிக்குச் செல்லவும்.</p>
+        <p>3. <strong>"Auto-Match by Employee Number"</strong> பொத்தானை அழுத்தினால் ஊழியரின் EMP ID தானாக இயந்திர User ID உடன் இணைக்கப்படும்.</p>
+        <p>4. தேவைப்படின் <strong>"Map Employee"</strong> மூலம் கைமுறையாகவும் பொருத்தலாம்.</p>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>3. வருகை பதிவை பெறுதல் & சம்பளத்தில் சேர்த்தல் (Attendance Sync Workflow)</span>
+    </div>
+
+    <div class="step-card">
+      <div class="step-header">
+        <div class="step-num">5</div>
+        <div class="step-title">ஒரே கிளிக்கில் வருகை ஒத்திசைவு (One-Click Sync)</div>
+      </div>
+      <div class="step-body">
+        <p>1. முகப்பு பக்கத்தில் (Dashboard) அல்லது Biometric பகுதியில் உள்ள பச்சை நிற <strong>"Sync Punch Logs"</strong> பொத்தானை அழுத்தவும்.</p>
+        <p>2. இயந்திரத்தில் பதிவான ஊழியர்களின் விரல் பதிவுகள் (In Time, Out Time) நொடிகளில் கணினிக்கு மாற்றப்படும்.</p>
+        <p>3. <strong>"Process Today's Attendance"</strong> அழுத்தினால் காலை 8:30 தாமத நேரம் (Grace Period), மேலதிக நேரம் (OT) மற்றும் 25-நாள் வருகை தானாக கணக்கிடப்படும்.</p>
+      </div>
+    </div>
+
+    <div class="pro-tip">
+      <strong>💡 முக்கிய தகவல் (Pro Tip):</strong> ஒவ்வொரு கைரேகை பஞ்சிலும் <strong>SHA-256 தனித்துவ குறியீடு</strong> (Hash) உள்ளதால் ஒரு நாளைக்கு எத்தனை முறை Sync செய்தாலும் இரட்டைப் பதிவுகள் (Duplicates) ஒருபோதும் உருவாகாது.
+    </div>
+
+    <div class="warning-box">
+      <strong>⚠️ சட்டரீதியான எச்சரிக்கை (Statutory Warning):</strong> Hikvision இயந்திரத்தின் கடிகார நேரம் இலங்கை நேரத்துடன் (<strong>GMT+5:30 Asia/Colombo</strong>) மிகச் சரியாக இருப்பதை உறுதி செய்யவும். தவறான நேரம் இருந்தால் ஊழியரின் OT மற்றும் தாமத கணக்கீடு பாதிக்கப்படும்.
+    </div>
+
+    <div class="section-title">
+      <span>4. பிழைத்திருத்த வழிகாட்டி (Troubleshooting Matrix)</span>
+    </div>
+
+    <table class="info-table" style="margin-bottom: 20px;">
+      <thead>
+        <tr>
+          <th>பிரச்சினை (Issue)</th>
+          <th>காரணம் (Cause)</th>
+          <th>தீர்வு (Resolution)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Connection Timeout / Offline</strong></td>
+          <td>IP முகவரி பொருந்தவில்லை அல்லது LAN கேபிள் துண்டிக்கப்பட்டுள்ளது</td>
+          <td>Router மற்றும் கேபிளை சரிபார்க்கவும். இயந்திரத்தின் IP (192.168.1.201) ஐ கணினியிலிருந்து Ping செய்து பார்க்கவும்.</td>
+        </tr>
+        <tr>
+          <td><strong>401 Unauthorized Error</strong></td>
+          <td>தவறான Username அல்லது Password</td>
+          <td>இயந்திரத்தின் சரியான admin கடவுச்சொல்லை HRM சாதன அமைப்பில் உள்ளிடவும்.</td>
+        </tr>
+        <tr>
+          <td><strong>Logs Not Syncing</strong></td>
+          <td>ஊழியர் ID மேப்பிங் செய்யப்படவில்லை</td>
+          <td>Employee Mapping தாவலுக்கு சென்று Auto-Match அழுத்தவும்.</td>
+        </tr>
+        <tr>
+          <td><strong>இணையம் இல்லை (No Internet)</strong></td>
+          <td>தொழிற்சாலை இணைய துண்டிப்பு</td>
+          <td>விண்டோஸ் சேவை (Windows Sync Client) பதிவுகளை கணினியில் பாதுகாப்பாக சேமித்து வைத்து இணையம் வந்தவுடன் பதிவேற்றும்.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="footer">
+      <span>UNIBRO SMART APPARELS (PVT) LTD • HRM Documentation</span>
+      <span>UFO Tech Solution 24/7 Enterprise Support: +94 11 234 5678</span>
+      <span>பக்கம் 1 / 1</span>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+};
+
