@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CompanySettings, Language, UserRole, Employee } from '../types';
 import { translations } from '../translations';
-import { Settings, ShieldCheck, Download, Upload, ShieldAlert, History, Database, Award, Clock, BarChart3, Fingerprint, Users } from 'lucide-react';
+import { Settings, ShieldCheck, Download, Upload, ShieldAlert, History, Database, Award, Clock, BarChart3, Fingerprint, Users, Cloud, Trash2, RefreshCw } from 'lucide-react';
 import JSZip from 'jszip';
 import { SeasonalIncentiveModule } from './SeasonalIncentiveModule';
 import { SpecialOTModule } from './SpecialOTModule';
@@ -9,6 +9,8 @@ import { ProductionSalesModule } from './ProductionSalesModule';
 import { WorkingTimeModule } from './WorkingTimeModule';
 import { BiometricManagement } from './BiometricManagement';
 import { UserManagement } from './UserManagement';
+import { SupabaseSettings } from './SupabaseSettings';
+import { saveSupabaseConfig } from '../utils/supabaseClient';
 
 interface ConfigurationModuleProps {
   language: Language;
@@ -25,7 +27,7 @@ export const ConfigurationModule: React.FC<ConfigurationModuleProps> = ({
 }) => {
   const t = translations[language];
   const isAdmin = role === 'admin';
-  const [activeTab, setActiveTab] = useState<'users' | 'biometric' | 'backup' | 'seasonal' | 'special-ot' | 'production' | 'working-time'>('users');
+  const [activeTab, setActiveTab] = useState<'supabase' | 'users' | 'biometric' | 'backup' | 'seasonal' | 'special-ot' | 'production' | 'working-time'>('supabase');
   const [employees, setEmployees] = useState<Employee[]>([]);
 
   const [settings, setSettings] = useState<CompanySettings>({
@@ -179,6 +181,37 @@ export const ConfigurationModule: React.FC<ConfigurationModuleProps> = ({
     }
   };
 
+  const [isResetting, setIsResetting] = useState(false);
+  const handleResetDemoData = async () => {
+    if (!isAdmin) return;
+    const confirmPrompt = window.confirm(
+      "Are you sure you want to clear all mock / demo transactional data?\n\nThis will remove test employee records, attendance punches, and draft payroll items while preserving your core system settings, users, and salary schemes.\n\nType OK to proceed."
+    );
+    if (!confirmPrompt) return;
+
+    setIsResetting(true);
+    try {
+      const res = await fetch('/api/reset-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-role': role
+        }
+      });
+      if (res.ok) {
+        alert("All mock and demo data have been completely removed.");
+        window.location.reload();
+      } else {
+        alert("Failed to reset demo data.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error resetting demo data.");
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -189,6 +222,15 @@ export const ConfigurationModule: React.FC<ConfigurationModuleProps> = ({
 
         {/* Configuration Sub-nav Tabs */}
         <div className="flex items-center gap-1 bg-stone-100 p-1.5 rounded-2xl overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('supabase')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
+              activeTab === 'supabase' ? 'bg-emerald-600 text-white shadow-xs' : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Cloud className={`w-4 h-4 ${activeTab === 'supabase' ? 'text-white' : 'text-emerald-600'}`} />
+            Supabase Cloud DB
+          </button>
           <button
             onClick={() => setActiveTab('users')}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${
@@ -276,7 +318,7 @@ export const ConfigurationModule: React.FC<ConfigurationModuleProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
               {/* Backup Card */}
               <div className="bg-stone-50 border border-stone-200 rounded-xl p-6 flex flex-col justify-between space-y-4">
@@ -334,6 +376,33 @@ export const ConfigurationModule: React.FC<ConfigurationModuleProps> = ({
                 </div>
               </div>
 
+              {/* Wipe Mock / Demo Data Card */}
+              <div className="bg-stone-50 border border-rose-200 rounded-xl p-6 flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center space-x-2 mb-1">
+                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    <h4 className="font-bold text-stone-900 text-sm">Purge Demo / Mock Records</h4>
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    Clears all mock employees, attendance punches, and test payroll runs to prepare a clean environment for production use while keeping schemes and user credentials intact.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleResetDemoData}
+                  disabled={!isAdmin || isResetting}
+                  className={`w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center space-x-2 shadow-xs cursor-pointer transition-all ${
+                    isAdmin
+                      ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300'
+                      : 'bg-stone-200 text-stone-400 cursor-not-allowed border border-stone-200'
+                  }`}
+                >
+                  <Trash2 className="w-4 h-4 mr-2 text-rose-600" />
+                  <span>{isResetting ? 'Purging records...' : 'Purge All Demo Data'}</span>
+                </button>
+              </div>
+
             </div>
 
             {/* Audit Log Table */}
@@ -380,6 +449,21 @@ export const ConfigurationModule: React.FC<ConfigurationModuleProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {activeTab === 'supabase' && (
+        <SupabaseSettings
+          language={language}
+          role={role}
+          settings={settings}
+          onSaveSettings={async (newSettings) => {
+            setSettings(newSettings);
+            await saveSupabaseConfig({
+              url: newSettings.supabase_url || '',
+              anonKey: newSettings.supabase_anon_key || ''
+            });
+          }}
+        />
       )}
 
       {activeTab === 'users' && (

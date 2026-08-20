@@ -516,6 +516,55 @@ app.post("/api/restore", (req, res) => {
   res.json({ success: true, message: "System restored successfully" });
 });
 
+// Reset / Clear Demo Data Endpoint
+app.post("/api/reset-data", (req, res) => {
+  const role = req.headers['x-user-role'] || req.body.role || 'admin';
+  if (role !== 'admin') {
+    return res.status(403).json({ error: "Unauthorized. Admin role required." });
+  }
+
+  const db = readDB();
+  const resetDB: DBData = {
+    ...initialData,
+    profiles: db.profiles && db.profiles.length > 0 ? db.profiles : initialData.profiles,
+    salary_schemes: db.salary_schemes && db.salary_schemes.length > 0 ? db.salary_schemes : initialData.salary_schemes,
+    company_settings: db.company_settings || initialData.company_settings,
+    employees: [],
+    attendance: [],
+    leave_records: [],
+    overtime_entries: [],
+    incentive_entries: [],
+    seasonal_incentive_rules: [],
+    special_ot_rules: [],
+    production_entries: [],
+    sales_entries: [],
+    daily_production_entries: [],
+    daily_sales_entries: [],
+    work_schedules: db.work_schedules || initialData.work_schedules,
+    employee_schedule_assignments: [],
+    payroll_runs: [],
+    payroll_items: [],
+    daily_attendance: [],
+    daily_overtime: [],
+    biometric_devices: [],
+    biometric_user_mappings: [],
+    biometric_attendance_logs: [],
+    epf_etf_payments: [],
+    audit_logs: [
+      {
+        id: "audit-" + Date.now(),
+        action: 'DATA_RESET',
+        timestamp: new Date().toISOString(),
+        user: 'admin@unibro.lk',
+        details: 'Cleared all mock/demo transaction records and employees'
+      }
+    ]
+  };
+
+  writeDB(resetDB);
+  res.json({ success: true, message: "All demo data and records have been cleared." });
+});
+
 app.get("/api/audit-logs", (req, res) => {
   const db = readDB();
   res.json(db.audit_logs || []);

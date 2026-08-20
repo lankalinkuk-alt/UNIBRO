@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { SalaryScheme, Language } from '../types';
 import { translations } from '../translations';
-import { Calculator, Plus, Edit2, Shield, DollarSign, Clock } from 'lucide-react';
+import { Calculator, Plus, Edit2, Shield, DollarSign, Clock, Check } from 'lucide-react';
 import { ReportToolbar } from './ReportToolbar';
 import { exportToExcel, exportToPdf, printReport } from '../utils/exportUtils';
+import { defaultSalarySchemes } from '../utils/clientDb';
 
 interface SalarySchemeModuleProps {
   language: Language;
@@ -11,8 +12,8 @@ interface SalarySchemeModuleProps {
 
 export const SalarySchemeModule: React.FC<SalarySchemeModuleProps> = ({ language }) => {
   const t = translations[language];
-  const [schemes, setSchemes] = useState<SalaryScheme[]>([]);
-  const [editingScheme, setEditingScheme] = useState<SalaryScheme | null>(null);
+  const [schemes, setSchemes] = useState<SalaryScheme[]>(defaultSalarySchemes as any);
+  const [editingScheme, setEditingScheme] = useState<SalaryScheme | null>(defaultSalarySchemes[0] as any);
 
   useEffect(() => {
     fetchSchemes();
@@ -22,12 +23,19 @@ export const SalarySchemeModule: React.FC<SalarySchemeModuleProps> = ({ language
     try {
       const res = await fetch('/api/salary-schemes');
       const data = await res.json();
-      setSchemes(data);
-      if (data.length > 0 && !editingScheme) {
-        setEditingScheme(data[0]);
+      if (Array.isArray(data) && data.length > 0) {
+        setSchemes(data);
+        if (!editingScheme) {
+          setEditingScheme(data[0]);
+        }
+      } else {
+        setSchemes(defaultSalarySchemes as any);
+        if (!editingScheme) setEditingScheme(defaultSalarySchemes[0] as any);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching salary schemes:", err);
+      setSchemes(defaultSalarySchemes as any);
+      if (!editingScheme) setEditingScheme(defaultSalarySchemes[0] as any);
     }
   };
 
@@ -41,7 +49,7 @@ export const SalarySchemeModule: React.FC<SalarySchemeModuleProps> = ({ language
         body: JSON.stringify(editingScheme)
       });
       if (res.ok) {
-        alert(t.success_saved);
+        alert(t.success_saved || 'Salary Scheme saved successfully!');
         fetchSchemes();
       }
     } catch (err) {

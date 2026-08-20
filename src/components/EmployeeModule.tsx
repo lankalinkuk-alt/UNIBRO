@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Employee, SalaryScheme, Language } from '../types';
 import { translations } from '../translations';
-import { UserPlus, Search, Edit2, Trash2, X, Check, Building, CreditCard, Users } from 'lucide-react';
+import { UserPlus, Search, Edit2, Trash2, X, Check, Building, CreditCard, Users, AlertCircle } from 'lucide-react';
 import { ReportToolbar } from './ReportToolbar';
 import { exportToExcel, exportToPdf, printReport } from '../utils/exportUtils';
+import { defaultSalarySchemes } from '../utils/clientDb';
 
 interface EmployeeModuleProps {
   language: Language;
@@ -12,14 +13,15 @@ interface EmployeeModuleProps {
 export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
   const t = translations[language];
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [schemes, setSchemes] = useState<SalaryScheme[]>([]);
+  const [schemes, setSchemes] = useState<SalaryScheme[]>(defaultSalarySchemes as any);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Employee>>({
-    employee_number: 'NL-',
+    employee_number: 'NL-001',
     full_name_en: '',
     full_name_ta: '',
     full_name_si: '',
@@ -31,7 +33,7 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
     epf_enabled: true,
     etf_enabled: true,
     ot_eligible: true,
-    salary_scheme_id: '',
+    salary_scheme_id: defaultSalarySchemes[0].id,
     bank_name: 'Commercial Bank',
     bank_branch: 'Colombo 03',
     bank_account_number: ''
@@ -46,9 +48,11 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
     try {
       const res = await fetch('/api/employees');
       const data = await res.json();
-      setEmployees(data);
+      if (Array.isArray(data)) {
+        setEmployees(data);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching employees:", err);
     }
   };
 
@@ -56,32 +60,48 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
     try {
       const res = await fetch('/api/salary-schemes');
       const data = await res.json();
-      setSchemes(data);
-      if (data.length > 0 && !formData.salary_scheme_id) {
-        setFormData(prev => ({ ...prev, salary_scheme_id: data[0].id }));
+      if (Array.isArray(data) && data.length > 0) {
+        setSchemes(data);
+        if (!formData.salary_scheme_id) {
+          setFormData(prev => ({ ...prev, salary_scheme_id: data[0].id }));
+        }
+      } else {
+        setSchemes(defaultSalarySchemes as any);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching schemes:", err);
+      setSchemes(defaultSalarySchemes as any);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const activeSchemes = schemes.length > 0 ? schemes : defaultSalarySchemes;
+      const finalSchemeId = formData.salary_scheme_id || activeSchemes[0]?.id || 'sch-1';
+      const payload = {
+        ...formData,
+        salary_scheme_id: finalSchemeId
+      };
+
       const url = editingEmp ? `/api/employees/${editingEmp.id}` : '/api/employees';
       const method = editingEmp ? 'PUT' : 'POST';
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       });
+
       if (res.ok) {
+        setSaveStatus(editingEmp ? 'Employee updated successfully!' : 'Employee registered successfully!');
+        setTimeout(() => setSaveStatus(null), 3000);
         setIsModalOpen(false);
         setEditingEmp(null);
-        fetchEmployees();
+        await fetchEmployees();
       }
     } catch (err) {
-      console.error(err);
+      console.error("Error saving employee:", err);
+      alert('Error saving employee. Please try again.');
     }
   };
 
@@ -97,8 +117,10 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
 
   const openAddModal = () => {
     setEditingEmp(null);
+    const activeSchemes = schemes.length > 0 ? schemes : defaultSalarySchemes;
+    const defaultSchemeId = activeSchemes[0]?.id || 'sch-1';
     setFormData({
-      employee_number: `NL-00${employees.length + 1}`,
+      employee_number: `NL-${String(employees.length + 1).padStart(3, '0')}`,
       full_name_en: '',
       full_name_ta: '',
       full_name_si: '',
@@ -110,7 +132,7 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
       epf_enabled: true,
       etf_enabled: true,
       ot_eligible: true,
-      salary_scheme_id: schemes[0]?.id || '',
+      salary_scheme_id: defaultSchemeId,
       bank_name: 'Commercial Bank',
       bank_branch: 'Colombo 03',
       bank_account_number: ''
@@ -324,6 +346,19 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
           </button>
         </div>
       </div>
+
+      {/* Save Status Toast */}
+      {saveStatus && (
+        <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-800 flex items-center justify-between shadow-xs">
+          <div className="flex items-center space-x-2 font-medium">
+            <Check className="w-5 h-5 text-emerald-600" />
+            <span>{saveStatus}</span>
+          </div>
+          <button onClick={() => setSaveStatus(null)} className="text-emerald-700 hover:text-emerald-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Search Bar & Quick Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -540,12 +575,12 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 uppercase mb-1">Salary Scheme</label>
                   <select
-                    value={formData.salary_scheme_id || ''}
+                    value={formData.salary_scheme_id || (schemes[0]?.id || defaultSalarySchemes[0].id)}
                     onChange={e => setFormData({ ...formData, salary_scheme_id: e.target.value })}
                     className="w-full px-3 py-2 border border-stone-300 rounded-xl text-sm bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                   >
-                    {schemes.map(s => (
-                      <option key={s.id} value={s.id}>{s.name} (Basic: LKR {s.basic_salary})</option>
+                    {(schemes.length > 0 ? schemes : (defaultSalarySchemes as any)).map((s: any) => (
+                      <option key={s.id} value={s.id}>{s.name || s.scheme_name} (Basic: LKR {(s.basic_salary || 0).toLocaleString()})</option>
                     ))}
                   </select>
                 </div>
