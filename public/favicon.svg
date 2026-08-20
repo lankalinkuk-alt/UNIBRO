@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="ufoGrad" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#06B6D4"/>
+    </linearGradient>
+    <linearGradient id="beamGrad" x1="32" y1="34" x2="32" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06B6D4" stop-opacity="0.6"/>
+      <stop offset="1" stop-color="#06B6D4" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#0F172A"/>
+  <!-- Light Beam -->
+  <polygon points="26,36 38,36 48,56 16,56" fill="url(#beamGrad)"/>
+  <!-- UFO Dome -->
+  <ellipse cx="32" cy="24" rx="10" ry="8" fill="#38BDF8" fill-opacity="0.85"/>
+  <!-- UFO Disc Body -->
+  <path d="M12 32C12 28.5 20.95 26 32 26C43.05 26 52 28.5 52 32C52 35.5 43.05 38 32 38C20.95 38 12 35.5 12 32Z" fill="url(#ufoGrad)"/>
+  <!-- Lights on Rim -->
+  <circle cx="20" cy="32.5" r="1.75" fill="#F8FAFC"/>
+  <circle cx="28" cy="33.5" r="1.75" fill="#F8FAFC"/>
+  <circle cx="36" cy="33.5" r="1.75" fill="#F8FAFC"/>
+  <circle cx="44" cy="32.5" r="1.75" fill="#F8FAFC"/>
+</svg>

@@ -1,0 +1,6 @@
+{
+  "name": "UNIBRO SMART APPARELS - HRM",
+  "description": "Production-ready Sri Lankan HRM & Payroll web application for UNIBRO SMART APPARELS with multilingual support, EPF/ETF calculations, 25-day salary schemes, and payslip printing",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

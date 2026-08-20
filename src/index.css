@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@media print {
+  header, #global-help-floating-btn, button, nav {
+    display: none !important;
+  }
+
+  body, html, main {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .help-center-root {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .help-center-root * {
+    color: #111827 !important;
+    border-color: #e5e7eb !important;
+    box-shadow: none !important;
+  }
+}
