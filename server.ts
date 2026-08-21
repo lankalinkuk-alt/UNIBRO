@@ -4,6 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const app = express();
 const PORT = 3000;
@@ -136,6 +137,112 @@ function readDB(): DBData {
 
 function writeDB(data: DBData) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
+
+// Server-side Supabase Client Initializer
+function getSupabaseServerClient(db?: DBData): SupabaseClient | null {
+  try {
+    const currentDb = db || readDB();
+    const settings = currentDb?.company_settings || {};
+    const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || settings.supabase_url;
+    const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || settings.supabase_anon_key;
+
+    if (!url || !key || !url.startsWith("http")) {
+      return null;
+    }
+
+    return createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false }
+    });
+  } catch (err) {
+    console.error("Failed to initialize server Supabase client:", err);
+    return null;
+  }
+}
+
+// Push a single In/Out punch log to Supabase with schema auto-fallback
+async function pushBiometricLogToSupabase(logRecord: any, db?: DBData): Promise<boolean> {
+  const supabase = getSupabaseServerClient(db);
+  if (!supabase) return false;
+
+  try {
+    const currentDb = db || readDB();
+    const employees = currentDb.employees || [];
+    const emp = employees.find((e: any) => e.id === logRecord.employee_id);
+
+    const safeTime = logRecord.check_time || logRecord.timestamp || new Date().toISOString();
+    const payload: Record<string, any> = {
+      id: logRecord.id,
+      device_id: logRecord.device_id || "bio-dev-001",
+      device_serial_number: logRecord.device_serial_number || "DS-K1A8503MF",
+      device_user_id: String(logRecord.device_user_id || "1"),
+      employee_id: logRecord.employee_id || null,
+      employee_number: emp?.employee_number || null,
+      employee_name: emp?.full_name_en || null,
+      department: emp?.department || null,
+      check_time: safeTime,
+      timestamp: safeTime,
+      verify_mode: logRecord.verify_mode || "fingerprint",
+      punch_type: logRecord.punch_type || "check_in",
+      sync_hash: logRecord.sync_hash || `hash_${logRecord.device_user_id}_${Date.now()}`,
+      sync_status: "synced",
+      synced_to_payroll: Boolean(logRecord.synced_to_payroll),
+      created_at: logRecord.created_at || new Date().toISOString()
+    };
+
+    // Primary upsert
+    const { error } = await supabase
+      .from("biometric_attendance_logs")
+      .upsert(payload, { onConflict: "id" });
+
+    if (!error) {
+      console.log(`[Supabase Sync] Saved biometric log ${logRecord.id} successfully.`);
+      return true;
+    }
+
+    console.warn(`[Supabase Sync] Attempt 1 failed for log ${logRecord.id}:`, error.message);
+
+    // Fallback if missing specific columns in older schema
+    const fallbackPayload = {
+      id: logRecord.id,
+      device_id: payload.device_id,
+      device_user_id: payload.device_user_id,
+      employee_id: payload.employee_id,
+      check_time: safeTime,
+      timestamp: safeTime,
+      verify_mode: payload.verify_mode,
+      punch_type: payload.punch_type,
+      created_at: payload.created_at
+    };
+
+    const { error: err2 } = await supabase
+      .from("biometric_attendance_logs")
+      .upsert(fallbackPayload, { onConflict: "id" });
+
+    if (!err2) {
+      console.log(`[Supabase Sync] Fallback saved biometric log ${logRecord.id} successfully.`);
+      return true;
+    }
+
+    console.error(`[Supabase Sync] Fallback failed for log ${logRecord.id}:`, err2.message);
+    return false;
+  } catch (ex: any) {
+    console.error("[Supabase Sync] Exception pushing biometric log:", ex.message);
+    return false;
+  }
+}
+
+// Push a batch of logs to Supabase in parallel
+async function pushBiometricLogsBatchToSupabase(records: any[], db?: DBData): Promise<number> {
+  const supabase = getSupabaseServerClient(db);
+  if (!supabase || !Array.isArray(records) || records.length === 0) return 0;
+
+  let count = 0;
+  for (const r of records) {
+    const ok = await pushBiometricLogToSupabase(r, db);
+    if (ok) count++;
+  }
+  return count;
 }
 
 // API Endpoints
@@ -624,27 +731,37 @@ app.get("/api/dashboard/realtime-attendance", (req, res) => {
 
     // Biometric device status and live punches today
     const biometricDevices = db.biometric_devices || [];
+    const userMappings = db.biometric_user_mappings || [];
     const onlineDevicesCount = biometricDevices.filter(d => d.status === 'online').length;
-    const todayPunches = (db.biometric_attendance_logs || []).filter(l => {
+    const allPunches = (db.biometric_attendance_logs || []).filter(l => {
       if (!l.check_time) return false;
       const logDate = l.check_time.slice(0, 10);
       return logDate === targetDate;
     });
 
-    const recentBiometricPunches = todayPunches.slice(-10).reverse().map(l => {
-      const emp = db.employees.find(e => e.id === l.employee_id);
+    const recentBiometricPunches = allPunches.slice().reverse().map(l => {
+      let empId = l.employee_id;
+      if (!empId && l.device_user_id) {
+        const mapping = userMappings.find(m => String(m.device_user_id) === String(l.device_user_id));
+        if (mapping) empId = mapping.employee_id;
+      }
+      const emp = db.employees.find(e => e.id === empId);
       const dev = biometricDevices.find(d => d.id === l.device_id);
       return {
         id: l.id,
+        device_id: l.device_id,
         device_name: dev?.device_name || l.device_serial_number || 'Hikvision Terminal',
         device_user_id: l.device_user_id,
-        employee_id: l.employee_id,
-        employee_name: emp?.full_name_en || `Biometric ID #${l.device_user_id}`,
+        employee_id: empId || null,
+        employee_name: emp?.full_name_en || (l.device_user_id ? `Biometric ID #${l.device_user_id}` : 'Unidentified'),
+        employee_name_ta: emp?.full_name_ta,
+        employee_name_si: emp?.full_name_si,
         employee_number: emp?.employee_number || 'Unmapped',
         department: emp?.department || 'General',
+        designation: emp?.designation || 'Staff',
         verify_mode: l.verify_mode || 'fingerprint',
         check_time: l.check_time,
-        punch_type: l.punch_type || 'check_in'
+        punch_type: l.punch_type || 'auto'
       };
     });
 
@@ -661,11 +778,19 @@ app.get("/api/dashboard/realtime-attendance", (req, res) => {
         total_devices: biometricDevices.length,
         online_devices: onlineDevicesCount,
         last_sync_time: latestSyncTime,
-        today_punches_count: todayPunches.length,
+        today_punches_count: allPunches.length,
         recent_punches: recentBiometricPunches
       },
+      recent_biometric_punches: recentBiometricPunches,
       summary: {
-        today_present: Math.max(presentEmpIds.size, new Set(todayPunches.filter(p => p.employee_id).map(p => p.employee_id)).size),
+        today_present: Math.max(presentEmpIds.size, new Set(allPunches.map(p => {
+          let empId = p.employee_id;
+          if (!empId && p.device_user_id) {
+            const mapping = userMappings.find(m => String(m.device_user_id) === String(p.device_user_id));
+            if (mapping) empId = mapping.employee_id;
+          }
+          return empId;
+        }).filter(Boolean)).size),
         on_leave: leaveEmpIds.size,
         absent: absentEmployees.length,
         overtime_employees: otEmpIds.size,
@@ -2081,6 +2206,11 @@ app.post("/api/biometric/logs/ingest", (req, res) => {
 
   writeDB(db);
 
+  // Automatically sync ingested batch to Supabase in background
+  pushBiometricLogsBatchToSupabase(records, db).catch(err => {
+    console.warn("[Supabase Ingest Sync] Warning:", err.message);
+  });
+
   res.json({
     success: true,
     inserted_count: insertedCount,
@@ -2121,7 +2251,129 @@ app.post("/api/biometric/logs", (req, res) => {
 
   db.biometric_attendance_logs.push(logRecord);
   writeDB(db);
+
+  // Automatically push to Supabase in background
+  pushBiometricLogToSupabase(logRecord, db).catch(err => {
+    console.warn("[Supabase Log Sync] Notice:", err.message);
+  });
+
   res.json(logRecord);
+});
+
+// Manual / Scheduled Sync all biometric devices, mappings & logs to Supabase
+app.post("/api/biometric/sync-supabase", async (req, res) => {
+  const db = readDB();
+  const supabase = getSupabaseServerClient(db);
+
+  if (!supabase) {
+    return res.status(400).json({
+      success: false,
+      error: "Supabase connection is not configured in settings."
+    });
+  }
+
+  try {
+    const devices = db.biometric_devices || [];
+    const mappings = db.biometric_user_mappings || [];
+    const logs = db.biometric_attendance_logs || [];
+
+    let devicesSynced = 0;
+    let mappingsSynced = 0;
+    let logsSynced = 0;
+
+    // 1. Sync devices
+    for (const d of devices) {
+      const payload = {
+        id: d.id,
+        name: d.name || d.device_name || "Hikvision Terminal",
+        device_name: d.device_name || d.name || "Hikvision Terminal",
+        ip_address: d.ip_address || "192.168.1.201",
+        port: Number(d.port) || 80,
+        device_model: d.device_model || "DS-K1A8503MF",
+        serial_number: d.serial_number || "DSK1A8503MF",
+        direction: d.direction || "BOTH",
+        sync_interval: Number(d.sync_interval) || 30,
+        is_active: d.is_active !== false,
+        status: d.status || "online",
+        last_sync_time: d.last_sync_time || new Date().toISOString(),
+        created_at: d.created_at || new Date().toISOString()
+      };
+      const { error } = await supabase.from("biometric_devices").upsert(payload, { onConflict: "id" });
+      if (!error) devicesSynced++;
+    }
+
+    // 2. Sync mappings
+    for (const m of mappings) {
+      const emp = (db.employees || []).find((e: any) => e.id === m.employee_id);
+      const payload = {
+        id: m.id,
+        device_id: m.device_id || "bio-dev-001",
+        device_user_id: String(m.device_user_id || "1"),
+        employee_id: m.employee_id || null,
+        employee_number: emp?.employee_number || m.employee_number || null,
+        employee_name: emp?.full_name_en || m.employee_name || null,
+        card_number: m.card_number || null,
+        verify_type: m.verify_type || "fingerprint",
+        enrolled_date: m.enrolled_date || new Date().toISOString().slice(0, 10),
+        created_at: m.created_at || new Date().toISOString()
+      };
+      const { error } = await supabase.from("biometric_user_mappings").upsert(payload, { onConflict: "id" });
+      if (!error) mappingsSynced++;
+    }
+
+    // 3. Sync logs
+    for (const l of logs) {
+      const ok = await pushBiometricLogToSupabase(l, db);
+      if (ok) logsSynced++;
+    }
+
+    res.json({
+      success: true,
+      devices_synced: devicesSynced,
+      mappings_synced: mappingsSynced,
+      logs_synced: logsSynced,
+      total_local_logs: logs.length,
+      synced_at: new Date().toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Check status of Supabase biometric logs table
+app.get("/api/biometric/supabase-status", async (req, res) => {
+  const db = readDB();
+  const supabase = getSupabaseServerClient(db);
+
+  if (!supabase) {
+    return res.json({
+      configured: false,
+      local_logs_count: (db.biometric_attendance_logs || []).length,
+      supabase_logs_count: 0
+    });
+  }
+
+  try {
+    const { count, error } = await supabase
+      .from("biometric_attendance_logs")
+      .select("*", { count: "exact", head: true });
+
+    res.json({
+      configured: true,
+      healthy: !error,
+      local_logs_count: (db.biometric_attendance_logs || []).length,
+      supabase_logs_count: error ? 0 : (count || 0),
+      error: error?.message
+    });
+  } catch (err: any) {
+    res.json({
+      configured: true,
+      healthy: false,
+      local_logs_count: (db.biometric_attendance_logs || []).length,
+      supabase_logs_count: 0,
+      error: err.message
+    });
+  }
 });
 
 // Process Biometric Punches into Daily Attendance & Overtime

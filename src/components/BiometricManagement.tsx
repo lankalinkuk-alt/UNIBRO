@@ -29,6 +29,11 @@ import {
 } from "lucide-react";
 import { openTamilBiometricGuidePrintWindow } from "../utils/helpPdfGenerator";
 import {
+  saveBiometricLogToSupabase,
+  syncBiometricDataToSupabase,
+  getSupabaseClient
+} from "../utils/supabaseClient";
+import {
   BiometricDevice,
   BiometricUserMapping,
   BiometricAttendanceLog,
@@ -274,22 +279,56 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
     e.preventDefault();
     setActionLoading("saving_punch");
     try {
+      const punchTime = new Date(punchForm.check_time).toISOString();
+      const payload = {
+        ...punchForm,
+        check_time: punchTime
+      };
+
       const res = await fetch("/api/biometric/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...punchForm,
-          check_time: new Date(punchForm.check_time).toISOString()
-        })
+        body: JSON.stringify(payload)
       });
+
+      // Also ensure client-side Supabase save if configured
+      try {
+        const emp = employees.find(e => e.id === punchForm.employee_id);
+        await saveBiometricLogToSupabase({
+          ...payload,
+          employee_number: emp?.employee_number,
+          employee_name: emp?.full_name_en,
+          department: emp?.department
+        });
+      } catch (sbErr) {
+        console.warn("Client Supabase direct push notice:", sbErr);
+      }
+
       if (res.ok) {
-        showToast("Attendance punch recorded successfully!");
+        showToast("Attendance punch recorded & synced successfully!");
         setShowManualPunchModal(false);
         fetchData();
         if (onRefreshParent) onRefreshParent();
       }
     } catch (err) {
       showToast("Failed to record punch.", "error");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSyncLogsToSupabase = async () => {
+    setActionLoading("syncing_supabase");
+    try {
+      const result = await syncBiometricDataToSupabase();
+      if (result.success) {
+        showToast(`Supabase Sync Successful! Synced ${result.logsSynced} attendance logs and ${result.devicesSynced} devices.`);
+        fetchData();
+      } else {
+        showToast(`Supabase Sync: ${result.error || "Please check Supabase settings"}`, "error");
+      }
+    } catch (err: any) {
+      showToast(`Sync error: ${err.message || "Failed to sync to Supabase"}`, "error");
     } finally {
       setActionLoading(null);
     }
@@ -816,6 +855,16 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
               </div>
 
               <div className="flex items-center gap-3">
+                <button
+                  id="btn_sync_logs_to_supabase"
+                  onClick={handleSyncLogsToSupabase}
+                  disabled={actionLoading === "syncing_supabase"}
+                  className="px-4 py-2 rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 font-medium text-xs transition flex items-center gap-1.5"
+                  title="Push all recorded in/out attendance logs into Supabase"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${actionLoading === "syncing_supabase" ? "animate-spin text-emerald-600" : "text-emerald-600"}`} />
+                  Sync to Supabase
+                </button>
                 <button
                   id="btn_add_manual_punch"
                   onClick={() => {

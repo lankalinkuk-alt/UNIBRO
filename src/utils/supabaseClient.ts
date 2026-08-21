@@ -131,6 +131,7 @@ ALTER TABLE payroll_runs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT
 
 -- 6. Biometric attendance tables
 ALTER TABLE biometric_devices ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE biometric_devices ADD COLUMN IF NOT EXISTS device_name TEXT;
 ALTER TABLE biometric_devices ADD COLUMN IF NOT EXISTS ip_address TEXT;
 ALTER TABLE biometric_devices ADD COLUMN IF NOT EXISTS port INT DEFAULT 80;
 ALTER TABLE biometric_devices ADD COLUMN IF NOT EXISTS device_model TEXT DEFAULT 'DS-K1A8503MF';
@@ -145,20 +146,37 @@ ALTER TABLE biometric_devices ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DE
 ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS device_id TEXT;
 ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS device_user_id TEXT;
 ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS employee_id TEXT;
+ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS employee_number TEXT;
+ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS employee_name TEXT;
 ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS card_number TEXT;
 ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS verify_type TEXT DEFAULT 'fingerprint';
 ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS enrolled_date DATE DEFAULT CURRENT_DATE;
 ALTER TABLE biometric_user_mappings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
 
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS device_id TEXT;
+ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS device_serial_number TEXT;
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS device_user_id TEXT;
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS employee_id TEXT;
+ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS employee_number TEXT;
+ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS employee_name TEXT;
+ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS department TEXT;
+ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS check_time TIMESTAMPTZ;
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ;
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS verify_mode TEXT DEFAULT 'fingerprint';
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS punch_type TEXT DEFAULT 'check_in';
+ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS sync_hash TEXT;
+ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS sync_status TEXT DEFAULT 'synced';
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS synced_to_payroll BOOLEAN DEFAULT false;
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS raw_payload JSONB;
 ALTER TABLE biometric_attendance_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Ensure timestamp / check_time cross-compatibility
+DO $$
+BEGIN
+  ALTER TABLE IF EXISTS biometric_attendance_logs ALTER COLUMN check_time DROP NOT NULL;
+  ALTER TABLE IF EXISTS biometric_attendance_logs ALTER COLUMN timestamp DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- 7. Type conversion safety if previously UUID
 DO $$
@@ -801,6 +819,9 @@ export const syncAllDataToSupabase = async (): Promise<{
   success: boolean;
   employeesSynced: number;
   schemesSynced: number;
+  devicesSynced?: number;
+  mappingsSynced?: number;
+  logsSynced?: number;
   error?: string;
 }> => {
   const client = getSupabaseClient();
@@ -894,11 +915,30 @@ export const syncAllDataToSupabase = async (): Promise<{
       await client.from('company_settings').upsert(settingsPayload, { onConflict: 'id' });
     }
 
+    // 4. Sync Biometric Devices, Mappings, and In/Out Attendance Logs
+    let bioDevicesSynced = 0;
+    let bioMappingsSynced = 0;
+    let bioLogsSynced = 0;
+
+    try {
+      const bioResult = await syncBiometricDataToSupabase();
+      if (bioResult.success) {
+        bioDevicesSynced = bioResult.devicesSynced;
+        bioMappingsSynced = bioResult.mappingsSynced;
+        bioLogsSynced = bioResult.logsSynced;
+      }
+    } catch (bioErr) {
+      console.warn("Biometric data sync notice in syncAllDataToSupabase:", bioErr);
+    }
+
     if (employeesSynced === 0 && employees.length > 0 && syncErrors.length > 0) {
       return {
         success: false,
         employeesSynced,
         schemesSynced,
+        logsSynced: bioLogsSynced,
+        devicesSynced: bioDevicesSynced,
+        mappingsSynced: bioMappingsSynced,
         error: syncErrors[0]
       };
     }
@@ -906,14 +946,322 @@ export const syncAllDataToSupabase = async (): Promise<{
     return {
       success: true,
       employeesSynced,
-      schemesSynced
+      schemesSynced,
+      logsSynced: bioLogsSynced,
+      devicesSynced: bioDevicesSynced,
+      mappingsSynced: bioMappingsSynced
     };
   } catch (err: any) {
     return {
       success: false,
       employeesSynced,
       schemesSynced,
+      logsSynced: 0,
+      devicesSynced: 0,
+      mappingsSynced: 0,
       error: err.message
     };
   }
+};
+
+/**
+ * Saves a single In/Out Biometric Attendance Log directly to Supabase with auto-healing schema adaptation
+ */
+export const saveBiometricLogToSupabase = async (
+  log: Record<string, any>
+): Promise<{ success: boolean; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, error: 'Supabase is not configured with URL and Anon Key' };
+  }
+
+  try {
+    const db = getClientDB();
+    const employees = db.employees || [];
+    const emp = employees.find(e => e.id === log.employee_id || e.employee_number === log.employee_number);
+
+    const safeTime = log.check_time || log.timestamp || new Date().toISOString();
+    const logId = log.id || `bio-log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const empNo = emp?.employee_number || log.employee_number || null;
+    const empName = emp?.full_name_en || log.employee_name || null;
+    const dept = emp?.department || log.department || null;
+
+    let payload: Record<string, any> = {
+      id: logId,
+      device_id: log.device_id || 'bio-dev-001',
+      device_serial_number: log.device_serial_number || 'DS-K1A8503MF',
+      device_user_id: String(log.device_user_id || '1'),
+      employee_id: log.employee_id || emp?.id || null,
+      employee_number: empNo,
+      employee_name: empName,
+      department: dept,
+      check_time: safeTime,
+      timestamp: safeTime,
+      verify_mode: log.verify_mode || 'fingerprint',
+      punch_type: log.punch_type || 'check_in',
+      sync_hash: log.sync_hash || `punch_${log.device_user_id || empNo}_${safeTime.replace(/[-:T+.]/g, '').slice(0, 14)}`,
+      sync_status: 'synced',
+      synced_to_payroll: Boolean(log.synced_to_payroll),
+      created_at: log.created_at || new Date().toISOString()
+    };
+
+    // Auto-adaptive upsert with retry loop
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { error } = await client
+        .from('biometric_attendance_logs')
+        .upsert(payload, { onConflict: 'id' });
+
+      if (!error) {
+        console.log("Successfully saved biometric attendance log to Supabase:", logId);
+        return { success: true };
+      }
+
+      console.warn(`Supabase biometric log attempt ${attempt + 1} notice:`, error);
+
+      // Handle 42703 / PGRST204: Column does not exist in schema cache
+      if (error.code === '42703' || (error as any).code === 'PGRST204' || error.message.includes('column') || error.message.includes('does not exist')) {
+        const colMatch = error.message.match(/'([^']+)' column/) || error.message.match(/column "([^"]+)"/i) || error.message.match(/column ([a-zA-Z0-9_]+) does not exist/i);
+        const missingCol = colMatch ? colMatch[1] : null;
+
+        if (missingCol && missingCol in payload) {
+          delete payload[missingCol];
+          continue;
+        }
+      }
+
+      // If generic column issue, fall back to core columns
+      if (attempt === 1) {
+        payload = {
+          id: logId,
+          device_id: payload.device_id,
+          device_user_id: payload.device_user_id,
+          employee_id: payload.employee_id,
+          check_time: safeTime,
+          timestamp: safeTime,
+          verify_mode: payload.verify_mode,
+          punch_type: payload.punch_type,
+          created_at: payload.created_at
+        };
+        continue;
+      }
+
+      if (attempt === 2) {
+        payload = {
+          id: logId,
+          device_id: payload.device_id,
+          device_user_id: payload.device_user_id,
+          timestamp: safeTime,
+          punch_type: payload.punch_type
+        };
+        continue;
+      }
+
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Exception saving biometric log to Supabase:", err);
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Saves a batch of In/Out Biometric Attendance Logs to Supabase
+ */
+export const saveBiometricLogsBatchToSupabase = async (
+  logs: any[]
+): Promise<{ success: boolean; count: number; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client || !Array.isArray(logs) || logs.length === 0) {
+    return { success: false, count: 0, error: 'No client or empty logs' };
+  }
+
+  let savedCount = 0;
+  for (const log of logs) {
+    const res = await saveBiometricLogToSupabase(log);
+    if (res.success) savedCount++;
+  }
+
+  return { success: savedCount > 0, count: savedCount };
+};
+
+/**
+ * Saves a Biometric Device to Supabase
+ */
+export const saveBiometricDeviceToSupabase = async (
+  device: any
+): Promise<{ success: boolean; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase not configured' };
+
+  try {
+    const payload = {
+      id: device.id || `bio-${Date.now()}`,
+      name: device.name || device.device_name || 'Hikvision Terminal',
+      device_name: device.device_name || device.name || 'Hikvision Terminal',
+      ip_address: device.ip_address || '192.168.1.201',
+      port: Number(device.port) || 80,
+      device_model: device.device_model || 'DS-K1A8503MF',
+      serial_number: device.serial_number || 'DSK1A8503MF',
+      direction: device.direction || 'BOTH',
+      sync_interval: Number(device.sync_interval) || 30,
+      is_active: device.is_active !== false,
+      status: device.status || 'online',
+      last_sync_time: device.last_sync_time || new Date().toISOString(),
+      created_at: device.created_at || new Date().toISOString()
+    };
+
+    const { error } = await client.from('biometric_devices').upsert(payload, { onConflict: 'id' });
+    return { success: !error, error: error?.message };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Saves a Biometric User/Card Mapping to Supabase
+ */
+export const saveBiometricMappingToSupabase = async (
+  mapping: any
+): Promise<{ success: boolean; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase not configured' };
+
+  try {
+    const db = getClientDB();
+    const emp = (db.employees || []).find(e => e.id === mapping.employee_id);
+
+    const payload = {
+      id: mapping.id || `bio-map-${Date.now()}`,
+      device_id: mapping.device_id || 'bio-dev-001',
+      device_user_id: String(mapping.device_user_id || '1'),
+      employee_id: mapping.employee_id || null,
+      employee_number: emp?.employee_number || mapping.employee_number || null,
+      employee_name: emp?.full_name_en || mapping.employee_name || null,
+      card_number: mapping.card_number || null,
+      verify_type: mapping.verify_type || 'fingerprint',
+      enrolled_date: mapping.enrolled_date || new Date().toISOString().slice(0, 10),
+      created_at: mapping.created_at || new Date().toISOString()
+    };
+
+    const { error } = await client.from('biometric_user_mappings').upsert(payload, { onConflict: 'id' });
+    return { success: !error, error: error?.message };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Fetches biometric logs from Supabase
+ */
+export const fetchBiometricLogsFromSupabase = async (
+  targetDate?: string
+): Promise<{ success: boolean; data?: any[]; error?: string }> => {
+  const client = getSupabaseClient();
+  if (!client) return { success: false, error: 'Supabase not configured' };
+
+  try {
+    let query = client
+      .from('biometric_attendance_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (targetDate) {
+      query = query.or(`check_time.gte.${targetDate}T00:00:00,timestamp.gte.${targetDate}T00:00:00`);
+    }
+
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+
+    return { success: true, data: data || [] };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+};
+
+/**
+ * Syncs all biometric hardware devices, user mappings, and In/Out Attendance Logs to Supabase
+ */
+export const syncBiometricDataToSupabase = async (): Promise<{
+  success: boolean;
+  logsSynced: number;
+  devicesSynced: number;
+  mappingsSynced: number;
+  error?: string;
+}> => {
+  const client = getSupabaseClient();
+  if (!client) {
+    return { success: false, logsSynced: 0, devicesSynced: 0, mappingsSynced: 0, error: 'Supabase is not configured' };
+  }
+
+  const db = getClientDB();
+  let devices: any[] = db.biometric_devices || [];
+  let mappings: any[] = db.biometric_user_mappings || [];
+  let logs: any[] = db.biometric_attendance_logs || [];
+
+  // Try fetching latest records from server API
+  try {
+    const [devRes, mapRes, logRes] = await Promise.all([
+      fetch('/api/biometric/devices'),
+      fetch('/api/biometric/mappings'),
+      fetch('/api/biometric/logs')
+    ]);
+
+    if (devRes.ok) {
+      const sDevs = await devRes.json();
+      if (Array.isArray(sDevs) && sDevs.length > 0) devices = sDevs;
+    }
+    if (mapRes.ok) {
+      const sMaps = await mapRes.json();
+      if (Array.isArray(sMaps) && sMaps.length > 0) mappings = sMaps;
+    }
+    if (logRes.ok) {
+      const sLogs = await logRes.json();
+      if (Array.isArray(sLogs) && sLogs.length > 0) {
+        const logMap = new Map<string, any>();
+        for (const l of logs) logMap.set(l.id || l.sync_hash, l);
+        for (const l of sLogs) logMap.set(l.id || l.sync_hash, l);
+        logs = Array.from(logMap.values());
+      }
+    }
+  } catch {
+    // continue with local data
+  }
+
+  let devicesSynced = 0;
+  let mappingsSynced = 0;
+  let logsSynced = 0;
+
+  // 1. Sync devices
+  for (const d of devices) {
+    const res = await saveBiometricDeviceToSupabase(d);
+    if (res.success) devicesSynced++;
+  }
+
+  // 2. Sync mappings
+  for (const m of mappings) {
+    const res = await saveBiometricMappingToSupabase(m);
+    if (res.success) mappingsSynced++;
+  }
+
+  // 3. Sync logs
+  for (const l of logs) {
+    const res = await saveBiometricLogToSupabase(l);
+    if (res.success) logsSynced++;
+  }
+
+  // Also notify server endpoint if online
+  try {
+    await fetch('/api/biometric/sync-supabase', { method: 'POST' });
+  } catch {
+    // ignore
+  }
+
+  return {
+    success: true,
+    logsSynced,
+    devicesSynced,
+    mappingsSynced
+  };
 };

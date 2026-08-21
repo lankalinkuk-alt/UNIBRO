@@ -138,7 +138,7 @@ export const SupabaseSettings: React.FC<SupabaseSettingsProps> = ({
     try {
       const res = await syncAllDataToSupabase();
       if (res.success) {
-        setSyncStatus(`Successfully synced ${res.employeesSynced} employees, ${res.schemesSynced} salary schemes, and company settings to Supabase!`);
+        setSyncStatus(`Successfully synced ${res.employeesSynced} employees, ${res.schemesSynced} salary schemes, ${res.devicesSynced ?? 0} biometric devices, and ${res.logsSynced ?? 0} in/out attendance logs to Supabase!`);
         await handleTest();
       } else {
         setSyncStatus(`Sync issue: ${res.error || 'Check database permissions.'}`);

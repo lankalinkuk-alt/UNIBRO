@@ -999,7 +999,89 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
   }
 
   if (pathname === '/api/biometric/logs') {
-    return createJsonResponse(db.biometric_attendance_logs || []);
+    if (method === 'POST') {
+      const empId = bodyData.employee_id || (db.biometric_user_mappings || []).find(m => m.device_user_id === String(bodyData.device_user_id))?.employee_id || null;
+      const emp = (db.employees || []).find(e => e.id === empId);
+
+      const newLog = {
+        id: `bio-log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        device_id: bodyData.device_id || (db.biometric_devices?.[0]?.id || 'bio-dev-001'),
+        device_serial_number: bodyData.device_serial_number || (db.biometric_devices?.[0]?.serial_number || 'DS-K1A8503MF'),
+        device_user_id: String(bodyData.device_user_id || '1'),
+        employee_id: empId,
+        employee_name: emp?.full_name_en || 'Unknown',
+        employee_number: emp?.employee_number || 'N/A',
+        department: emp?.department || 'N/A',
+        verify_mode: bodyData.verify_mode || 'fingerprint',
+        check_time: bodyData.check_time || new Date().toISOString(),
+        punch_type: bodyData.punch_type || 'check_in',
+        sync_hash: `manual_${Date.now()}_${bodyData.device_user_id || empId}`,
+        sync_status: 'synced',
+        created_at: new Date().toISOString()
+      };
+
+      if (!db.biometric_attendance_logs) db.biometric_attendance_logs = [];
+      db.biometric_attendance_logs.push(newLog);
+      saveClientDB(db);
+      return createJsonResponse(newLog, 201);
+    }
+
+    // GET handling
+    let logs = (db.biometric_attendance_logs || []).map(l => {
+      const emp = (db.employees || []).find(e => e.id === l.employee_id);
+      const dev = (db.biometric_devices || []).find(d => d.id === l.device_id);
+      return {
+        ...l,
+        employee_name: l.employee_name || emp?.full_name_en || (l.employee_id ? 'Unknown' : 'Unmapped'),
+        employee_number: l.employee_number || emp?.employee_number || 'N/A',
+        department: l.department || emp?.department || 'N/A',
+        device_name: dev?.device_name || l.device_serial_number || 'Hikvision Terminal'
+      };
+    });
+
+    const dateFilter = searchParams.get('date');
+    if (dateFilter) {
+      logs = logs.filter(l => l.check_time && l.check_time.startsWith(dateFilter));
+    }
+    const empFilter = searchParams.get('employee_id');
+    if (empFilter) {
+      logs = logs.filter(l => l.employee_id === empFilter);
+    }
+
+    logs.sort((a, b) => new Date(b.check_time).getTime() - new Date(a.check_time).getTime());
+    return createJsonResponse(logs);
+  }
+
+  if (pathname === '/api/biometric/logs/ingest' && method === 'POST') {
+    const records = bodyData.records || [];
+    if (!db.biometric_attendance_logs) db.biometric_attendance_logs = [];
+    let count = 0;
+
+    for (const r of records) {
+      const empId = r.employee_id || (db.biometric_user_mappings || []).find(m => m.device_user_id === String(r.device_user_id))?.employee_id || null;
+      const emp = (db.employees || []).find(e => e.id === empId);
+
+      db.biometric_attendance_logs.push({
+        id: `bio-log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        device_id: bodyData.device_id || 'bio-dev-001',
+        device_serial_number: bodyData.device_serial_number || 'DS-K1A8503MF',
+        device_user_id: String(r.device_user_id || '1'),
+        employee_id: empId,
+        employee_name: emp?.full_name_en || 'Unknown',
+        employee_number: emp?.employee_number || 'N/A',
+        department: emp?.department || 'N/A',
+        verify_mode: r.verify_mode || 'fingerprint',
+        check_time: r.check_time || new Date().toISOString(),
+        punch_type: r.punch_type || 'check_in',
+        sync_hash: r.sync_hash || `ingest_${Date.now()}_${r.device_user_id}`,
+        sync_status: 'synced',
+        created_at: new Date().toISOString()
+      });
+      count++;
+    }
+
+    saveClientDB(db);
+    return createJsonResponse({ success: true, inserted_count: count });
   }
 
   if (pathname === '/api/biometric/process-daily') {
