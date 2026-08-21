@@ -389,7 +389,7 @@ export const RunPayroll: React.FC<RunPayrollProps> = ({ language }) => {
                 <Unlock className="w-3.5 h-3.5 mr-1.5" /> Draft Mode (Editable)
               </span>
             )}
-            <span className="text-xs text-stone-500">Last updated: {new Date(payrollRun.updated_at || Date.now()).toLocaleDateString()}</span>
+            <span className="text-xs text-stone-500">Last updated: {new Date(payrollRun.updated_at || payrollRun.created_at || payrollRun.calculated_at || Date.now()).toLocaleDateString()}</span>
           </div>
           <div className="flex items-center space-x-3">
             <button

@@ -80,8 +80,8 @@ export const SalarySchemeModule: React.FC<SalarySchemeModuleProps> = ({ language
         sch.basic_salary || 0,
         sch.fixed_allowance_25_days || 0,
         totalBase,
-        sch.ot_rate_normal || 0,
-        sch.ot_rate_double || 0,
+        sch.ot_normal_rate_per_hour || sch.ot_rate_normal || 0,
+        sch.ot_off_rate_per_hour || sch.ot_rate_double || 0,
         epfEmp,
         epfEmpr,
         etfEmpr
@@ -141,8 +141,8 @@ export const SalarySchemeModule: React.FC<SalarySchemeModuleProps> = ({ language
       `Rs. ${(sch.basic_salary || 0).toLocaleString()}`,
       `Rs. ${(sch.fixed_allowance_25_days || 0).toLocaleString()}`,
       `Rs. ${((sch.basic_salary || 0) + (sch.fixed_allowance_25_days || 0)).toLocaleString()}`,
-      `Rs. ${sch.ot_rate_normal || 0}/hr`,
-      `Rs. ${sch.ot_rate_double || 0}/hr`,
+      `Rs. ${sch.ot_normal_rate_per_hour || sch.ot_rate_normal || 0}/hr`,
+      `Rs. ${sch.ot_off_rate_per_hour || sch.ot_rate_double || 0}/hr`,
       `Rs. ${((sch.basic_salary || 0) * 0.08).toLocaleString()}`
     ]);
 
@@ -184,8 +184,8 @@ export const SalarySchemeModule: React.FC<SalarySchemeModuleProps> = ({ language
       `LKR ${(sch.basic_salary || 0).toLocaleString()}`,
       `LKR ${(sch.fixed_allowance_25_days || 0).toLocaleString()}`,
       `LKR ${((sch.basic_salary || 0) + (sch.fixed_allowance_25_days || 0)).toLocaleString()}`,
-      `LKR ${sch.ot_rate_normal || 0} / hr`,
-      `LKR ${sch.ot_rate_double || 0} / hr`
+      `LKR ${sch.ot_normal_rate_per_hour || sch.ot_rate_normal || 0} / hr`,
+      `LKR ${sch.ot_off_rate_per_hour || sch.ot_rate_double || 0} / hr`
     ]);
 
     const totalBasic = schemes.reduce((sum, s) => sum + (s.basic_salary || 0), 0);

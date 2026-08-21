@@ -55,6 +55,7 @@ export interface Employee {
 export interface SalaryScheme {
   id: string;
   name: string;
+  scheme_name?: string;
   basic_salary: number;
   fixed_allowance_25_days: number;
   // Allowance deduction rules for attendance shortfall based on 25 working days
@@ -67,6 +68,15 @@ export interface SalaryScheme {
   ot_normal_rate_per_hour: number;
   ot_off_rate_per_hour: number;
   ot_poya_rate_per_hour: number;
+  ot_rate_normal?: number;
+  ot_rate_double?: number;
+  bra_allowance?: number;
+  budgetary_relief?: number;
+  epf_applicable_allowances?: number;
+  ot_rate_type?: string;
+  attendance_incentive_rule?: string;
+  attendance_incentive_target_days?: number;
+  attendance_incentive_amount?: number;
   incentive_type: 'Manufacturing' | 'Sales' | 'Fixed' | 'None';
   default_incentive_amount: number;
   epf_etf_applicable: boolean;
@@ -104,16 +114,22 @@ export interface PayrollRun {
   id: string;
   month: string; // YYYY-MM
   status: 'Draft' | 'Locked' | 'Approved';
-  total_basic: number;
-  total_allowances: number;
-  total_ot: number;
-  total_incentives: number;
-  total_deductions: number;
+  total_basic?: number;
+  total_allowances?: number;
+  total_ot?: number;
+  total_incentives?: number;
+  total_deductions?: number;
   total_epf_employee: number;
   total_epf_employer: number;
   total_etf_employer: number;
   total_net: number;
-  created_at: string;
+  total_gross_pay?: number;
+  total_net_pay?: number;
+  employee_count?: number;
+  is_locked?: boolean;
+  calculated_at?: string;
+  created_at?: string;
+  updated_at?: string;
   locked_at?: string;
 }
 
@@ -352,6 +368,9 @@ export interface BiometricUserMapping {
   device_id: string;
   device_user_id: string; // ID registered in Hikvision terminal
   employee_id: string; // Linked system employee ID
+  employee_name?: string;
+  employee_number?: string;
+  department?: string;
   card_number?: string;
   verify_type?: 'fingerprint' | 'card' | 'face' | 'password' | 'multiple';
   enrolled_date?: string;

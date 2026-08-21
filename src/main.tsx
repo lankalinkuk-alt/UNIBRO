@@ -3,12 +3,16 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { setupClientApiInterceptor } from './utils/clientDb';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Initialize offline & static host (Netlify / Vercel) API interceptor
 setupClientApiInterceptor();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 );
+

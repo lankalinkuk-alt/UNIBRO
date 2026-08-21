@@ -232,7 +232,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ language, onNavigate, stat
                 </span>
               </div>
               <p className="text-xs text-stone-500 mt-0.5">
-                {t.last_sync_time || 'Last Synced'}: {bioSummary.last_sync_time ? new Date(bioSummary.last_sync_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Never'} • {bioSummary.today_total_punches} punches captured today
+                {(t as any).last_sync_time || 'Last Synced'}: {bioSummary.last_sync_time ? new Date(bioSummary.last_sync_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Never'} • {bioSummary.today_total_punches} punches captured today
               </p>
             </div>
           </div>
@@ -252,7 +252,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ language, onNavigate, stat
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white p-5 rounded-xl border border-stone-200 shadow-xs flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">{t.realtime_present_count || 'Today Present'}</p>
+              <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider">{(t as any).realtime_present_count || 'Today Present'}</p>
               <p className="text-3xl font-extrabold text-emerald-700 mt-1">{summary.today_present}</p>
               <p className="text-xs text-stone-400 mt-1">Out of {summary.total_active} active employees</p>
             </div>
@@ -322,7 +322,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ language, onNavigate, stat
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {attendanceData.today_leave_list.map((item: any, idx: number) => (
+                      {(attendanceData.today_leave_list || []).map((item: any, idx: number) => (
                         <tr key={idx} className="hover:bg-stone-50">
                           <td className="py-2.5 font-medium text-stone-900">
                             {item.employee_name} <span className="text-stone-400">({item.employee_number})</span>
@@ -355,7 +355,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ language, onNavigate, stat
                 </span>
               </div>
 
-              {attendanceData.late_arrivals?.length === 0 ? (
+              {(!attendanceData.late_arrivals || attendanceData.late_arrivals.length === 0) ? (
                 <div className="text-center py-8 text-stone-400 text-xs">No late arrivals recorded today. All on time!</div>
               ) : (
                 <div className="overflow-x-auto">
@@ -368,7 +368,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ language, onNavigate, stat
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {attendanceData.late_arrivals.map((item: any, idx: number) => (
+                      {(attendanceData.late_arrivals || []).map((item: any, idx: number) => (
                         <tr key={idx} className="hover:bg-stone-50">
                           <td className="py-2.5 font-medium text-stone-900">
                             {item.employee_name} <span className="text-stone-400">({item.employee_number})</span>
@@ -401,7 +401,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ language, onNavigate, stat
                 </span>
               </div>
 
-              {!attendanceData.recent_biometric_punches || attendanceData.recent_biometric_punches.length === 0 ? (
+              {(!attendanceData.recent_biometric_punches || attendanceData.recent_biometric_punches.length === 0) ? (
                 <div className="text-center py-8 text-stone-400 text-xs">No recent biometric punches received.</div>
               ) : (
                 <div className="overflow-x-auto">
@@ -414,7 +414,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ language, onNavigate, stat
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {attendanceData.recent_biometric_punches.slice(0, 5).map((punch: any, idx: number) => (
+                      {(attendanceData.recent_biometric_punches || []).slice(0, 5).map((punch: any, idx: number) => (
                         <tr key={idx} className="hover:bg-stone-50">
                           <td className="py-2.5 font-mono font-medium text-stone-900">
                             {punch.check_time ? new Date(punch.check_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}

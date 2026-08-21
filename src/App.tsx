@@ -70,14 +70,17 @@ export default function App() {
       const runRes = await fetch('/api/payroll-runs/2026-08');
       const payrollData = await runRes.json();
 
+      const empCount = Array.isArray(employees) ? employees.length : 0;
+      const run = payrollData?.run;
+
       setStats({
-        employeeCount: employees.length || 3,
-        lastPayrollNet: payrollData.run?.total_net || 145000,
-        epfTotal: (payrollData.run?.total_epf_employee || 0) + (payrollData.run?.total_epf_employer || 0),
-        etfTotal: payrollData.run?.total_etf_employer || 10500
+        employeeCount: empCount,
+        lastPayrollNet: run?.total_net || run?.total_net_pay || 0,
+        epfTotal: (run?.total_epf_employee || 0) + (run?.total_epf_employer || 0),
+        etfTotal: run?.total_etf_employer || 0
       });
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching stats in App:", err);
     }
   };
 

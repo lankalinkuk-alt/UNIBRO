@@ -101,11 +101,37 @@ export const defaultSalarySchemes = [
     epf_etf_applicable: true,
     budgetary_relief: 3500,
     bra_allowance: 2500,
-    epf_applicable_allowances: 4000,
+    epf_applicable_allowances: 3000,
     ot_rate_type: "1.5",
     attendance_incentive_rule: "target_days",
     attendance_incentive_target_days: 25,
     attendance_incentive_amount: 5000,
+    no_pay_deduction_rate: 0
+  },
+  {
+    id: "sch-4",
+    name: "Junior Helper / Trainee (28,000 Basic)",
+    scheme_name: "Junior Helper / Trainee (28,000 Basic)",
+    basic_salary: 28000,
+    fixed_allowance_25_days: 12000,
+    deduct_day_1: 800,
+    deduct_day_2: 1000,
+    deduct_day_3: 1200,
+    deduct_day_4: 1500,
+    deduct_additional_day: 2000,
+    ot_normal_rate_per_hour: 220,
+    ot_off_rate_per_hour: 300,
+    ot_poya_rate_per_hour: 450,
+    incentive_type: "Manufacturing",
+    default_incentive_amount: 4000,
+    epf_etf_applicable: true,
+    budgetary_relief: 2500,
+    bra_allowance: 2000,
+    epf_applicable_allowances: 2000,
+    ot_rate_type: "1.5",
+    attendance_incentive_rule: "target_days",
+    attendance_incentive_target_days: 25,
+    attendance_incentive_amount: 4000,
     no_pay_deduction_rate: 0
   }
 ];
@@ -115,33 +141,34 @@ export const defaultInitialDB: LocalStorageDB = {
     {
       id: "u1",
       email: "admin@unibro.lk",
-      name: "System Admin",
+      name: "System Administrator",
       role: "admin",
       status: "active",
       permissions: [
-        "manage_users",
-        "edit_employee",
-        "delete_employee",
-        "manage_schemes",
+        "all",
+        "user_management",
+        "salary_schemes",
+        "employee_records",
+        "working_hours_config",
         "calculate_payroll",
         "lock_payroll",
         "epf_etf_vouchers",
-        "manage_biometric",
-        "system_config",
-        "export_reports",
-        "view_audit_logs"
+        "backup_restore",
+        "biometric_config",
+        "export_reports"
       ],
       created_at: new Date().toISOString()
     },
     {
       id: "u2",
       email: "hr@unibro.lk",
-      name: "HR Manager",
+      name: "HR Executive",
       role: "hr",
       status: "active",
       permissions: [
-        "edit_employee",
-        "manage_biometric",
+        "employee_records",
+        "working_hours_config",
+        "biometric_config",
         "export_reports"
       ],
       created_at: new Date().toISOString()
@@ -199,33 +226,6 @@ export const defaultInitialDB: LocalStorageDB = {
       off_day_ot_rate: 500,
       holiday_ot_rate: 750,
       night_ot_rate: 600
-    },
-    {
-      id: "sch-night",
-      name: "Night Production Shift (20:00 - 05:00)",
-      shift_type: "Night",
-      working_days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
-      start_time: "20:00",
-      end_time: "05:00",
-      total_working_hours: 8,
-      break_start: "00:00",
-      break_end: "01:00",
-      break_paid: true,
-      crosses_midnight: true,
-      grace_period_mins: 15,
-      mark_late_after_grace: true,
-      deduct_for_late: true,
-      late_deduction_method: "per_minute",
-      late_deduction_amount: 120,
-      half_day_min_hours: 4,
-      absent_min_hours: 2,
-      ot_start_after_end: true,
-      min_ot_mins: 30,
-      ot_rounding_mins: 15,
-      normal_ot_rate: 450,
-      off_day_ot_rate: 600,
-      holiday_ot_rate: 900,
-      night_ot_rate: 750
     }
   ],
   employee_schedule_assignments: [],
@@ -233,7 +233,19 @@ export const defaultInitialDB: LocalStorageDB = {
   payroll_items: [],
   daily_attendance: [],
   daily_overtime: [],
-  biometric_devices: [],
+  biometric_devices: [
+    {
+      id: "bio-1",
+      device_name: "Hikvision Main Gate Terminal",
+      device_model: "DS-K1A8503MF",
+      serial_number: "DSK1A8503MF-987654",
+      ip_address: "192.168.1.201",
+      port: 8000,
+      protocol: "ISAPI",
+      status: "online",
+      last_sync_time: new Date().toISOString()
+    }
+  ],
   biometric_user_mappings: [],
   biometric_attendance_logs: [],
   epf_etf_payments: [],
@@ -259,10 +271,9 @@ export const getClientDB = (): LocalStorageDB => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultInitialDB));
-      return defaultInitialDB;
+      return { ...defaultInitialDB };
     }
     const parsed = JSON.parse(raw);
-    // Ensure all mandatory arrays exist and salary_schemes has default schemes if empty
     if (!parsed.salary_schemes || parsed.salary_schemes.length === 0) {
       parsed.salary_schemes = defaultSalarySchemes;
     }
@@ -271,21 +282,31 @@ export const getClientDB = (): LocalStorageDB => {
     }
     if (!parsed.employees) parsed.employees = [];
     if (!parsed.attendance) parsed.attendance = [];
+    if (!parsed.leave_records) parsed.leave_records = [];
+    if (!parsed.overtime_entries) parsed.overtime_entries = [];
+    if (!parsed.incentive_entries) parsed.incentive_entries = [];
     if (!parsed.payroll_runs) parsed.payroll_runs = [];
+    if (!parsed.payroll_items) parsed.payroll_items = [];
     if (!parsed.company_settings) parsed.company_settings = defaultInitialDB.company_settings;
     if (!parsed.work_schedules || parsed.work_schedules.length === 0) parsed.work_schedules = defaultInitialDB.work_schedules;
     if (!parsed.employee_schedule_assignments) parsed.employee_schedule_assignments = [];
     if (!parsed.special_ot_rules) parsed.special_ot_rules = [];
     if (!parsed.seasonal_incentive_rules) parsed.seasonal_incentive_rules = [];
+    if (!parsed.production_entries) parsed.production_entries = [];
+    if (!parsed.sales_entries) parsed.sales_entries = [];
+    if (!parsed.daily_production_entries) parsed.daily_production_entries = [];
+    if (!parsed.daily_sales_entries) parsed.daily_sales_entries = [];
+    if (!parsed.daily_attendance) parsed.daily_attendance = [];
+    if (!parsed.daily_overtime) parsed.daily_overtime = [];
     if (!parsed.epf_etf_payments) parsed.epf_etf_payments = [];
-    if (!parsed.biometric_devices) parsed.biometric_devices = [];
+    if (!parsed.biometric_devices) parsed.biometric_devices = defaultInitialDB.biometric_devices;
     if (!parsed.biometric_user_mappings) parsed.biometric_user_mappings = [];
     if (!parsed.biometric_attendance_logs) parsed.biometric_attendance_logs = [];
     if (!parsed.audit_logs) parsed.audit_logs = [];
     return parsed;
   } catch (e) {
     console.error("Error reading client DB from localStorage:", e);
-    return defaultInitialDB;
+    return { ...defaultInitialDB };
   }
 };
 
@@ -297,9 +318,9 @@ export const saveClientDB = (db: LocalStorageDB) => {
   }
 };
 
-// Creates a synthetic Response object that mimics window.fetch Response
+// Creates a synthetic Response object mimicking window.fetch Response
 const createJsonResponse = (data: any, status = 200, statusText = 'OK'): Response => {
-  const body = JSON.stringify(data);
+  const body = JSON.stringify(data ?? null);
   return new Response(body, {
     status,
     statusText,
@@ -314,7 +335,6 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
   const method = (options.method || 'GET').toUpperCase();
   const db = getClientDB();
   
-  // Clean URL path
   const parsedUrl = new URL(url, window.location.origin);
   const pathname = parsedUrl.pathname;
   const searchParams = parsedUrl.searchParams;
@@ -374,13 +394,6 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
       const index = db.employees.findIndex(e => e.id === id);
       if (index !== -1) {
         db.employees[index] = { ...db.employees[index], ...bodyData };
-        db.audit_logs.unshift({
-          id: `audit-${Date.now()}`,
-          action: 'EMPLOYEE_UPDATE',
-          timestamp: new Date().toISOString(),
-          user: 'admin@unibro.lk',
-          details: `Updated employee ${db.employees[index].full_name_en} (${db.employees[index].employee_number})`
-        });
         saveClientDB(db);
         return createJsonResponse(db.employees[index]);
       }
@@ -389,14 +402,7 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     if (method === 'DELETE') {
       const index = db.employees.findIndex(e => e.id === id);
       if (index !== -1) {
-        const deleted = db.employees.splice(index, 1)[0];
-        db.audit_logs.unshift({
-          id: `audit-${Date.now()}`,
-          action: 'EMPLOYEE_DELETE',
-          timestamp: new Date().toISOString(),
-          user: 'admin@unibro.lk',
-          details: `Deleted employee ${deleted.full_name_en} (${deleted.employee_number})`
-        });
+        db.employees.splice(index, 1);
         saveClientDB(db);
         return createJsonResponse({ message: 'Deleted successfully' });
       }
@@ -506,21 +512,44 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     return createJsonResponse(db.audit_logs || []);
   }
 
-  // 6. DASHBOARD METRICS
+  // 6. DASHBOARD REALTIME ATTENDANCE
   if (pathname === '/api/dashboard/realtime-attendance') {
-    const activeEmployees = db.employees.filter(e => e.employment_status === 'Active');
+    const activeEmployees = (db.employees || []).filter(e => e.employment_status === 'Active');
+    const biometricDevices = db.biometric_devices || [];
+    const onlineDevices = biometricDevices.filter(d => d.status === 'online').length;
+
     return createJsonResponse({
       date: new Date().toISOString().split('T')[0],
-      total_employees: db.employees.length,
-      active_employees: activeEmployees.length,
-      present_count: activeEmployees.length,
-      late_count: 0,
-      leaves_count: 0,
-      absent_count: 0,
-      on_floor_now: activeEmployees.length,
-      recent_punches: [],
-      devices_online: db.biometric_devices.filter(d => d.status === 'online').length,
-      devices_total: db.biometric_devices.length
+      work_start_time: db.company_settings?.work_start_time || "08:30",
+      biometric_summary: {
+        total_devices: biometricDevices.length,
+        online_devices: onlineDevices > 0 ? onlineDevices : 1,
+        offline_devices: 0,
+        last_sync_time: new Date().toISOString(),
+        today_total_punches: (db.biometric_attendance_logs || []).length,
+        today_punches_count: (db.biometric_attendance_logs || []).length,
+        recent_punches: []
+      },
+      summary: {
+        today_present: activeEmployees.length,
+        on_leave: 0,
+        absent: 0,
+        overtime_employees: 0,
+        total_active: activeEmployees.length
+      },
+      today_leave_list: [],
+      late_arrivals: [],
+      present_list: activeEmployees.map(emp => ({
+        employee_id: emp.id,
+        employee_number: emp.employee_number,
+        employee_name: emp.full_name_en,
+        department: emp.department,
+        check_in_time: "08:15",
+        is_late: false
+      })),
+      absent_list: [],
+      overtime_list: [],
+      recent_biometric_punches: []
     });
   }
 
@@ -535,6 +564,24 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     }
   }
 
+  const workSchMatch = pathname.match(/^\/api\/work-schedules\/([^/]+)$/);
+  if (workSchMatch) {
+    const id = workSchMatch[1];
+    if (method === 'PUT') {
+      const idx = db.work_schedules.findIndex(s => s.id === id);
+      if (idx !== -1) {
+        db.work_schedules[idx] = { ...db.work_schedules[idx], ...bodyData };
+        saveClientDB(db);
+        return createJsonResponse(db.work_schedules[idx]);
+      }
+    }
+    if (method === 'DELETE') {
+      db.work_schedules = db.work_schedules.filter(s => s.id !== id);
+      saveClientDB(db);
+      return createJsonResponse({ success: true });
+    }
+  }
+
   // 8. SCHEDULE ASSIGNMENTS
   if (pathname === '/api/employee-schedule-assignments') {
     if (method === 'GET') return createJsonResponse(db.employee_schedule_assignments || []);
@@ -544,6 +591,14 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
       saveClientDB(db);
       return createJsonResponse(newAsg, 201);
     }
+  }
+
+  const asgMatch = pathname.match(/^\/api\/employee-schedule-assignments\/([^/]+)$/);
+  if (asgMatch && method === 'DELETE') {
+    const id = asgMatch[1];
+    db.employee_schedule_assignments = db.employee_schedule_assignments.filter(a => a.id !== id);
+    saveClientDB(db);
+    return createJsonResponse({ success: true });
   }
 
   // 9. SPECIAL OT & SEASONAL RULES
@@ -557,6 +612,24 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     }
   }
 
+  const sotMatch = pathname.match(/^\/api\/special-ot-rules\/([^/]+)$/);
+  if (sotMatch) {
+    const id = sotMatch[1];
+    if (method === 'PUT') {
+      const idx = db.special_ot_rules.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        db.special_ot_rules[idx] = { ...db.special_ot_rules[idx], ...bodyData };
+        saveClientDB(db);
+        return createJsonResponse(db.special_ot_rules[idx]);
+      }
+    }
+    if (method === 'DELETE') {
+      db.special_ot_rules = db.special_ot_rules.filter(r => r.id !== id);
+      saveClientDB(db);
+      return createJsonResponse({ success: true });
+    }
+  }
+
   if (pathname === '/api/seasonal-incentive-rules') {
     if (method === 'GET') return createJsonResponse(db.seasonal_incentive_rules || []);
     if (method === 'POST') {
@@ -567,19 +640,50 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     }
   }
 
-  // 10. PAYROLL RUNS
-  const payrollMonthMatch = pathname.match(/^\/api\/payroll-runs\/([^/]+)$/);
-  if (payrollMonthMatch) {
-    const month = payrollMonthMatch[1];
-    const run = (db.payroll_runs || []).find(r => r.month === month);
-    return createJsonResponse(run || null);
+  const sirMatch = pathname.match(/^\/api\/seasonal-incentive-rules\/([^/]+)$/);
+  if (sirMatch) {
+    const id = sirMatch[1];
+    if (method === 'PUT') {
+      const idx = db.seasonal_incentive_rules.findIndex(r => r.id === id);
+      if (idx !== -1) {
+        db.seasonal_incentive_rules[idx] = { ...db.seasonal_incentive_rules[idx], ...bodyData };
+        saveClientDB(db);
+        return createJsonResponse(db.seasonal_incentive_rules[idx]);
+      }
+    }
+    if (method === 'DELETE') {
+      db.seasonal_incentive_rules = db.seasonal_incentive_rules.filter(r => r.id !== id);
+      saveClientDB(db);
+      return createJsonResponse({ success: true });
+    }
   }
 
-  if (pathname === '/api/payroll-runs/calculate') {
+  // 10. PAYROLL RUNS
+  if (pathname === '/api/payroll-runs' && method === 'GET') {
+    return createJsonResponse(db.payroll_runs || []);
+  }
+
+  const payrollMonthMatch = pathname.match(/^\/api\/payroll-runs\/([^/]+)$/);
+  if (payrollMonthMatch && method === 'GET') {
+    const month = payrollMonthMatch[1];
+    const run = (db.payroll_runs || []).find(r => r.month === month) || null;
+    const items = run ? (db.payroll_items || []).filter(i => i.payroll_run_id === run.id) : [];
+    return createJsonResponse({ run, items });
+  }
+
+  if (pathname === '/api/payroll-runs/calculate' && method === 'POST') {
     const month = bodyData.month || new Date().toISOString().slice(0, 7);
-    const employees = db.employees.filter(e => e.employment_status === 'Active');
+    const employees = (db.employees || []).filter(e => e.employment_status === 'Active');
+    
+    let total_gross = 0;
+    let total_net = 0;
+    let total_epf_emp = 0;
+    let total_epf_empr = 0;
+    let total_etf_empr = 0;
+
+    const runId = `prun-${month}`;
     const items = employees.map(emp => {
-      const scheme = db.salary_schemes.find(s => s.id === emp.salary_scheme_id) || db.salary_schemes[0] || defaultSalarySchemes[0];
+      const scheme = (db.salary_schemes || []).find(s => s.id === emp.salary_scheme_id) || db.salary_schemes[0] || defaultSalarySchemes[0];
       const basic = scheme.basic_salary || 35000;
       const bra = scheme.bra_allowance || 2500;
       const budgetRelief = scheme.budgetary_relief || 3500;
@@ -587,40 +691,46 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
       const epfEmp = epfGross * 0.08;
       const epfEmplr = epfGross * 0.12;
       const etfEmplr = epfGross * 0.03;
-      const otAmount = 0;
       const fixedAllowance = scheme.fixed_allowance_25_days || 15000;
-      const grossEarnings = epfGross + fixedAllowance + otAmount;
-      const totalDeductions = epfEmp;
-      const netSalary = grossEarnings - totalDeductions;
-      
+      const grossEarnings = epfGross + fixedAllowance;
+      const netSalary = grossEarnings - epfEmp;
+
+      total_gross += grossEarnings;
+      total_net += netSalary;
+      total_epf_emp += epfEmp;
+      total_epf_empr += epfEmplr;
+      total_etf_empr += etfEmplr;
+
       return {
         id: `pitem-${emp.id}-${month}`,
+        payroll_run_id: runId,
         employee_id: emp.id,
         employee_number: emp.employee_number,
         full_name_en: emp.full_name_en,
+        full_name_ta: emp.full_name_ta || '',
+        full_name_si: emp.full_name_si || '',
         department: emp.department,
         designation: emp.designation,
         basic_salary: basic,
+        basic_earned: basic,
         budgetary_relief: budgetRelief,
         bra_allowance: bra,
-        epf_applicable_allowances: 0,
-        gross_salary_for_epf: epfGross,
         fixed_allowance_25_days: fixedAllowance,
+        fixed_allowance_earned: fixedAllowance,
         ot_hours: 0,
-        ot_amount: otAmount,
-        attendance_incentive: 5000,
+        ot_amount: 0,
+        incentive_amount: 0,
+        attendance_incentive: 0,
         gross_earnings: grossEarnings,
+        employee_epf_8: epfEmp,
         epf_employee: epfEmp,
-        salary_advance: 0,
-        loan_deduction: 0,
-        stamp_duty: 0,
+        employer_epf_12: epfEmplr,
+        employer_etf_3: etfEmplr,
+        advance_deduction: 0,
+        late_deduction: 0,
         no_pay_deduction: 0,
-        other_deductions: 0,
-        total_deductions: totalDeductions,
+        total_deductions: epfEmp,
         net_salary: netSalary,
-        epf_employer: epfEmplr,
-        etf_employer: etfEmplr,
-        total_statutory_liability: epfEmplr + etfEmplr,
         days_attended: 25,
         payment_method: 'bank',
         bank_name: emp.bank_name || 'Commercial Bank',
@@ -629,18 +739,18 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     });
 
     const newRun = {
-      id: `prun-${month}`,
+      id: runId,
       month,
       status: 'Draft',
       is_locked: false,
       calculated_at: new Date().toISOString(),
       employee_count: items.length,
-      total_gross_pay: items.reduce((sum, i) => sum + i.gross_earnings, 0),
-      total_net_pay: items.reduce((sum, i) => sum + i.net_salary, 0),
-      total_epf_employee: items.reduce((sum, i) => sum + i.epf_employee, 0),
-      total_epf_employer: items.reduce((sum, i) => sum + i.epf_employer, 0),
-      total_etf_employer: items.reduce((sum, i) => sum + i.etf_employer, 0),
-      items
+      total_gross_pay: total_gross,
+      total_net: total_net,
+      total_net_pay: total_net,
+      total_epf_employee: total_epf_emp,
+      total_epf_employer: total_epf_empr,
+      total_etf_employer: total_etf_empr
     };
 
     const existingIndex = (db.payroll_runs || []).findIndex(r => r.month === month);
@@ -650,11 +760,113 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
       if (!db.payroll_runs) db.payroll_runs = [];
       db.payroll_runs.push(newRun);
     }
+
+    db.payroll_items = (db.payroll_items || []).filter(i => i.payroll_run_id !== runId).concat(items);
     saveClientDB(db);
-    return createJsonResponse(newRun);
+    return createJsonResponse({ run: newRun, items });
   }
 
-  // 11. EPF/ETF PAYMENTS
+  const runLockMatch = pathname.match(/^\/api\/payroll-runs\/([^/]+)\/(lock|unlock)$/);
+  if (runLockMatch && method === 'POST') {
+    const month = runLockMatch[1];
+    const action = runLockMatch[2];
+    const run = (db.payroll_runs || []).find(r => r.month === month);
+    if (run) {
+      run.status = action === 'lock' ? 'Locked' : 'Draft';
+      run.is_locked = action === 'lock';
+      saveClientDB(db);
+      return createJsonResponse({ success: true, run });
+    }
+  }
+
+  // 11. EPF/ETF BALANCE SUMMARY & PAYMENTS
+  const epfSummaryMatch = pathname.match(/^\/api\/epf-etf-balance-summary\/([^/]+)$/);
+  if (epfSummaryMatch) {
+    const month = epfSummaryMatch[1];
+    const payrollRun = (db.payroll_runs || []).find(r => r.month === month);
+    const items = payrollRun ? (db.payroll_items || []).filter(i => i.payroll_run_id === payrollRun.id) : [];
+    const payments = (db.epf_etf_payments || []).filter(p => p.month === month);
+
+    const departmentsSet = new Set<string>();
+    (db.employees || []).forEach(e => { if (e.department) departmentsSet.add(e.department); });
+    items.forEach(i => { if (i.department) departmentsSet.add(i.department); });
+    const departmentList = Array.from(departmentsSet);
+
+    const totalEmpEPF = items.reduce((acc, i) => acc + (i.employee_epf_8 || 0), 0);
+    const totalEmployerEPF = items.reduce((acc, i) => acc + (i.employer_epf_12 || 0), 0);
+    const totalEPF = totalEmpEPF + totalEmployerEPF;
+    const totalEmployerETF = items.reduce((acc, i) => acc + (i.employer_etf_3 || 0), 0);
+    const totalStatutoryLiability = totalEPF + totalEmployerETF;
+    const totalEpfBase = items.reduce((acc, i) => acc + (i.basic_earned || 0) + (i.fixed_allowance_earned || 0), 0);
+
+    let totalPaidOverall = 0;
+    let totalPaidEPF = 0;
+    let totalPaidETF = 0;
+    payments.forEach(p => {
+      totalPaidOverall += (p.amount || 0);
+      if (p.payment_type === 'ETF_3') totalPaidETF += p.amount;
+      else if (p.payment_type === 'EPF_20' || p.payment_type === 'EPF_EMP_8' || p.payment_type === 'EPF_EMPR_12') totalPaidEPF += p.amount;
+      else {
+        totalPaidEPF += ((p.amount || 0) * 20) / 23;
+        totalPaidETF += ((p.amount || 0) * 3) / 23;
+      }
+    });
+
+    const currentOutstandingBalance = Math.max(0, totalStatutoryLiability - totalPaidOverall);
+    const epfOutstandingBalance = Math.max(0, totalEPF - totalPaidEPF);
+    const etfOutstandingBalance = Math.max(0, totalEmployerETF - totalPaidETF);
+
+    const departmentBreakdown = departmentList.map(dept => {
+      const deptItems = items.filter(i => i.department === dept);
+      const deptEmpEpf = deptItems.reduce((acc, i) => acc + (i.employee_epf_8 || 0), 0);
+      const deptEmprEpf = deptItems.reduce((acc, i) => acc + (i.employer_epf_12 || 0), 0);
+      const deptEpf = deptEmpEpf + deptEmprEpf;
+      const deptEtf = deptItems.reduce((acc, i) => acc + (i.employer_etf_3 || 0), 0);
+      const deptTotalStatutory = deptEpf + deptEtf;
+      const deptBase = deptItems.reduce((acc, i) => acc + (i.basic_earned || 0) + (i.fixed_allowance_earned || 0), 0);
+      const deptDirectPayments = payments.filter(p => p.department === dept).reduce((acc, p) => acc + (p.amount || 0), 0);
+      const allDeptPayments = payments.filter(p => p.department === 'All').reduce((acc, p) => acc + (p.amount || 0), 0);
+      const deptShareOfAll = totalStatutoryLiability > 0 ? (deptTotalStatutory / totalStatutoryLiability) * allDeptPayments : 0;
+      const totalDeptPaid = deptDirectPayments + deptShareOfAll;
+      const deptBalance = Math.max(0, deptTotalStatutory - totalDeptPaid);
+
+      return {
+        department: dept,
+        employee_count: deptItems.length,
+        epf_base_total: Math.round(deptBase * 100) / 100,
+        epf_employee_8: Math.round(deptEmpEpf * 100) / 100,
+        epf_employer_12: Math.round(deptEmprEpf * 100) / 100,
+        epf_total_20: Math.round(deptEpf * 100) / 100,
+        etf_employer_3: Math.round(deptEtf * 100) / 100,
+        total_statutory_due: Math.round(deptTotalStatutory * 100) / 100,
+        total_paid: Math.round(totalDeptPaid * 100) / 100,
+        current_balance: Math.round(deptBalance * 100) / 100,
+        status: totalDeptPaid >= deptTotalStatutory && deptTotalStatutory > 0 ? 'Settled' : (totalDeptPaid > 0 ? 'Partially Paid' : 'Unpaid')
+      };
+    });
+
+    return createJsonResponse({
+      month,
+      has_payroll: !!payrollRun,
+      payroll_status: payrollRun?.status || 'None',
+      total_epf_base: Math.round(totalEpfBase * 100) / 100,
+      total_employee_epf_8: Math.round(totalEmpEPF * 100) / 100,
+      total_employer_epf_12: Math.round(totalEmployerEPF * 100) / 100,
+      total_epf_20: Math.round(totalEPF * 100) / 100,
+      total_employer_etf_3: Math.round(totalEmployerETF * 100) / 100,
+      total_statutory_liability: Math.round(totalStatutoryLiability * 100) / 100,
+      total_paid: Math.round(totalPaidOverall * 100) / 100,
+      total_paid_epf: Math.round(totalPaidEPF * 100) / 100,
+      total_paid_etf: Math.round(totalPaidETF * 100) / 100,
+      current_outstanding_balance: Math.round(currentOutstandingBalance * 100) / 100,
+      epf_outstanding_balance: Math.round(epfOutstandingBalance * 100) / 100,
+      etf_outstanding_balance: Math.round(etfOutstandingBalance * 100) / 100,
+      overall_status: totalStatutoryLiability === 0 ? 'No Due' : (currentOutstandingBalance === 0 ? 'Fully Settled' : (totalPaidOverall > 0 ? 'Partially Paid' : 'Pending Payment')),
+      department_breakdown: departmentBreakdown,
+      payments
+    });
+  }
+
   if (pathname === '/api/epf-etf-payments') {
     if (method === 'GET') return createJsonResponse(db.epf_etf_payments || []);
     if (method === 'POST') {
@@ -666,7 +878,84 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     }
   }
 
-  // 12. BIOMETRICS
+  const pmtIdMatch = pathname.match(/^\/api\/epf-etf-payments\/([^/]+)$/);
+  if (pmtIdMatch) {
+    const id = pmtIdMatch[1];
+    if (method === 'DELETE') {
+      db.epf_etf_payments = (db.epf_etf_payments || []).filter(p => p.id !== id);
+      saveClientDB(db);
+      return createJsonResponse({ success: true });
+    }
+  }
+
+  // 12. PRODUCTION & SALES
+  if (pathname === '/api/production-entries') {
+    if (method === 'GET') {
+      const m = searchParams.get('month');
+      const filtered = m ? (db.production_entries || []).filter(p => p.month === m) : (db.production_entries || []);
+      return createJsonResponse(filtered);
+    }
+    if (method === 'POST') {
+      const item = { id: `prod-${Date.now()}`, ...bodyData };
+      if (!db.production_entries) db.production_entries = [];
+      db.production_entries.push(item);
+      saveClientDB(db);
+      return createJsonResponse(item, 201);
+    }
+  }
+
+  if (pathname === '/api/sales-entries') {
+    if (method === 'GET') {
+      const m = searchParams.get('month');
+      const filtered = m ? (db.sales_entries || []).filter(s => s.month === m) : (db.sales_entries || []);
+      return createJsonResponse(filtered);
+    }
+    if (method === 'POST') {
+      const item = { id: `sales-${Date.now()}`, ...bodyData };
+      if (!db.sales_entries) db.sales_entries = [];
+      db.sales_entries.push(item);
+      saveClientDB(db);
+      return createJsonResponse(item, 201);
+    }
+  }
+
+  if (pathname === '/api/daily-production-entries') {
+    if (method === 'GET') {
+      const date = searchParams.get('date');
+      const m = searchParams.get('month');
+      let filtered = db.daily_production_entries || [];
+      if (date) filtered = filtered.filter(p => p.date === date);
+      if (m) filtered = filtered.filter(p => p.date && p.date.startsWith(m));
+      return createJsonResponse(filtered);
+    }
+    if (method === 'POST') {
+      const item = { id: `dprod-${Date.now()}`, ...bodyData };
+      if (!db.daily_production_entries) db.daily_production_entries = [];
+      db.daily_production_entries.push(item);
+      saveClientDB(db);
+      return createJsonResponse(item, 201);
+    }
+  }
+
+  if (pathname === '/api/daily-sales-entries') {
+    if (method === 'GET') {
+      const date = searchParams.get('date');
+      const m = searchParams.get('month');
+      let filtered = db.daily_sales_entries || [];
+      if (date) filtered = filtered.filter(s => s.date === date);
+      if (m) filtered = filtered.filter(s => s.date && s.date.startsWith(m));
+      return createJsonResponse(filtered);
+    }
+    if (method === 'POST') {
+      const item = { id: `dsales-${Date.now()}`, ...bodyData };
+      if (!db.daily_sales_entries) db.daily_sales_entries = [];
+      db.daily_sales_entries.push(item);
+      saveClientDB(db);
+      return createJsonResponse(item, 201);
+    }
+  }
+
+  // 13. BIOMETRICS
   if (pathname === '/api/biometric/devices') {
     if (method === 'GET') return createJsonResponse(db.biometric_devices || []);
     if (method === 'POST') {
@@ -676,6 +965,22 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
       saveClientDB(db);
       return createJsonResponse(newDev, 201);
     }
+  }
+
+  const bioDevMatch = pathname.match(/^\/api\/biometric\/devices\/([^/]+)$/);
+  if (bioDevMatch && method === 'DELETE') {
+    const id = bioDevMatch[1];
+    db.biometric_devices = (db.biometric_devices || []).filter(d => d.id !== id);
+    saveClientDB(db);
+    return createJsonResponse({ success: true });
+  }
+
+  if (pathname.includes('/test-connection')) {
+    return createJsonResponse({ success: true, status: 'online', latency_ms: 12 });
+  }
+
+  if (pathname.includes('/sync-now')) {
+    return createJsonResponse({ success: true, synced_count: 0 });
   }
 
   if (pathname === '/api/biometric/mappings') {
@@ -689,11 +994,19 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
     }
   }
 
+  if (pathname === '/api/biometric/mappings/auto-match') {
+    return createJsonResponse({ success: true, matched_count: 0 });
+  }
+
   if (pathname === '/api/biometric/logs') {
     return createJsonResponse(db.biometric_attendance_logs || []);
   }
 
-  // 13. BACKUP & RESTORE
+  if (pathname === '/api/biometric/process-daily') {
+    return createJsonResponse({ success: true, processed_logs: 0 });
+  }
+
+  // 14. BACKUP & RESTORE & RESET
   if (pathname === '/api/backup') {
     const backupJson = JSON.stringify(db, null, 2);
     return new Response(backupJson, {
@@ -712,7 +1025,7 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
         saveClientDB({ ...db, ...restoredData });
         return createJsonResponse({ message: 'Backup restored successfully' });
       }
-      return createJsonResponse({ error: 'Invalid backup file format' }, 400);
+      return createJsonResponse({ error: 'Invalid backup format' }, 400);
     } catch {
       return createJsonResponse({ error: 'Failed to restore backup' }, 500);
     }
@@ -741,7 +1054,7 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
       payroll_items: [],
       daily_attendance: [],
       daily_overtime: [],
-      biometric_devices: [],
+      biometric_devices: db.biometric_devices && db.biometric_devices.length > 0 ? db.biometric_devices : defaultInitialDB.biometric_devices,
       biometric_user_mappings: [],
       biometric_attendance_logs: [],
       epf_etf_payments: [],
@@ -767,8 +1080,11 @@ export const handleClientApiRequest = async (url: string, options: RequestInit =
 export const setupClientApiInterceptor = () => {
   if (typeof window === 'undefined') return;
 
-  // Initialize DB immediately
-  getClientDB();
+  try {
+    getClientDB();
+  } catch (e) {
+    console.error("Failed to initialize client DB:", e);
+  }
 
   const originalFetch = window.fetch ? window.fetch.bind(window) : fetch.bind(globalThis);
 
@@ -786,21 +1102,21 @@ export const setupClientApiInterceptor = () => {
     if (urlStr.startsWith('/api/') || urlStr.includes('/api/')) {
       try {
         const response = await originalFetch(input, init);
-        
-        // If response is valid JSON from an actual Express server, return it!
         const contentType = response.headers.get('content-type') || '';
+
+        // If actual Express API server responds with JSON, use it!
         if (response.ok && contentType.includes('application/json')) {
           return response;
         }
-        
-        // If response is HTML (e.g. Netlify _redirects serving index.html) or 404/500, fallback to client DB!
+
+        // If static host (Netlify) returns HTML or 404, fallback to client DB
         if (contentType.includes('text/html') || !response.ok) {
           return await handleClientApiRequest(urlStr, init);
         }
 
         return response;
       } catch {
-        // When server is offline or Netlify static host has no backend
+        // When server is offline or Netlify static host has no node server
         return await handleClientApiRequest(urlStr, init);
       }
     }
@@ -809,11 +1125,9 @@ export const setupClientApiInterceptor = () => {
   };
 
   try {
-    // Try standard assignment first
     window.fetch = customFetch;
   } catch {
     try {
-      // If window.fetch has only a getter or is non-writable, override via defineProperty
       Object.defineProperty(window, 'fetch', {
         value: customFetch,
         writable: true,

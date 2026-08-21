@@ -91,7 +91,7 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
     device_user_id: "",
     employee_id: "",
     card_number: "",
-    verify_type: "fingerprint" as "fingerprint" | "card" | "face" | "password",
+    verify_type: "fingerprint" as "fingerprint" | "card" | "face" | "password" | "multiple",
     enrolled_date: new Date().toISOString().slice(0, 10)
   });
 
@@ -328,9 +328,12 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
 
   const filteredMappings = mappings.filter(m => {
     const q = mappingSearchQuery.toLowerCase();
+    const emp = employees.find(e => e.id === m.employee_id);
+    const empName = emp?.full_name_en || m.employee_name || '';
+    const empNum = emp?.employee_number || m.employee_number || '';
     return (
-      (m.employee_name && m.employee_name.toLowerCase().includes(q)) ||
-      (m.employee_number && m.employee_number.toLowerCase().includes(q)) ||
+      empName.toLowerCase().includes(q) ||
+      empNum.toLowerCase().includes(q) ||
       (m.device_user_id && m.device_user_id.toLowerCase().includes(q)) ||
       (m.card_number && m.card_number.toLowerCase().includes(q))
     );
@@ -714,7 +717,9 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
                       </td>
                     </tr>
                   ) : (
-                    filteredMappings.map((m) => (
+                    filteredMappings.map((m) => {
+                      const emp = employees.find(e => e.id === m.employee_id);
+                      return (
                       <tr key={m.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition">
                         <td className="py-3 px-3">
                           <span className="font-mono font-bold px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 rounded-lg text-xs border border-slate-200 dark:border-slate-700">
@@ -724,20 +729,20 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
                         <td className="py-3 px-3">
                           <div>
                             <p className="font-semibold text-slate-900 dark:text-white">
-                              {m.employee_name}
+                              {emp?.full_name_en || m.employee_name || 'Unmapped'}
                             </p>
                             <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                              {m.employee_number}
+                              {emp?.employee_number || m.employee_number || '—'}
                             </p>
                           </div>
                         </td>
                         <td className="py-3 px-3 text-slate-600 dark:text-slate-300 text-xs">
-                          {m.department || "General"}
+                          {emp?.department || m.department || "General"}
                         </td>
                         <td className="py-3 px-3">
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 capitalize flex items-center gap-1 w-fit">
                             <Fingerprint className="w-3 h-3 text-indigo-500" />
-                            {m.verify_type}
+                            {m.verify_type || 'fingerprint'}
                           </span>
                         </td>
                         <td className="py-3 px-3 font-mono text-xs text-slate-600 dark:text-slate-400">
@@ -774,7 +779,8 @@ export const BiometricManagement: React.FC<BiometricManagementProps> = ({
                           </div>
                         </td>
                       </tr>
-                    ))
+                    );
+                    })
                   )}
                 </tbody>
               </table>

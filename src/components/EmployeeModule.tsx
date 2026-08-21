@@ -187,7 +187,7 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
         emp.epf_enabled ? 'Yes (8%)' : 'No',
         emp.etf_enabled ? 'Yes (3%)' : 'No',
         emp.ot_eligible ? 'Yes' : 'No',
-        scheme ? scheme.scheme_name : 'Standard',
+        scheme ? (scheme.name || scheme.scheme_name || 'Standard') : 'Standard',
         emp.bank_name || '-',
         emp.bank_account_number || '-'
       ];

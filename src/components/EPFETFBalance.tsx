@@ -747,7 +747,7 @@ export const EPFETFBalance: React.FC<EPFETFBalanceProps> = ({ language }) => {
                   </tr>
                 )}
               </tbody>
-              {balanceSummary && balanceSummary.department_breakdown.length > 0 && (
+              {Boolean(balanceSummary?.department_breakdown && balanceSummary.department_breakdown.length > 0) && (
                 <tfoot>
                   <tr className="bg-stone-100 font-bold text-stone-900 border-t-2 border-stone-300 text-sm">
                     <td className="p-4">GRAND TOTALS</td>
@@ -981,7 +981,7 @@ export const EPFETFBalance: React.FC<EPFETFBalanceProps> = ({ language }) => {
                   </tr>
                 )}
               </tbody>
-              {balanceSummary && balanceSummary.payments.length > 0 && (
+              {Boolean(balanceSummary?.payments && balanceSummary.payments.length > 0) && (
                 <tfoot>
                   <tr className="bg-stone-100 font-bold text-stone-900 border-t-2 border-stone-300 text-sm">
                     <td className="p-4" colSpan={6}>TOTAL REMITTED / PAID PORTION</td>
