@@ -704,32 +704,169 @@ app.get("/api/dashboard/realtime-attendance", (req, res) => {
   });
 
 // Employees
+async function syncEmployeeToSupabaseServer(emp: any, action: 'upsert' | 'delete' = 'upsert') {
+  try {
+    const db = readDB();
+    const url = (db.company_settings?.supabase_url || process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '');
+    const key = (db.company_settings?.supabase_anon_key || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    if (!url || !key) return { success: false, reason: 'Not configured' };
+
+    if (action === 'delete') {
+      const delRes = await fetch(`${url}/rest/v1/employees?id=eq.${encodeURIComponent(emp.id)}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`
+        }
+      });
+      return { success: delRes.ok };
+    }
+
+    // Ensure salary scheme exists in Supabase if scheme id provided
+    if (emp.salary_scheme_id) {
+      const scheme = db.salary_schemes?.find((s: any) => s.id === emp.salary_scheme_id);
+      if (scheme) {
+        try {
+          await fetch(`${url}/rest/v1/salary_schemes`, {
+            method: 'POST',
+            headers: {
+              'apikey': key,
+              'Authorization': `Bearer ${key}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'resolution=merge-duplicates'
+            },
+            body: JSON.stringify({
+              id: scheme.id,
+              name: scheme.name || scheme.scheme_name || 'Standard Scheme',
+              basic_salary: Number(scheme.basic_salary) || 35000,
+              fixed_allowance_25_days: Number(scheme.fixed_allowance_25_days) || 0,
+              ot_normal_rate_per_hour: Number(scheme.ot_normal_rate_per_hour) || 250,
+              ot_off_rate_per_hour: Number(scheme.ot_off_rate_per_hour) || 350,
+              ot_poya_rate_per_hour: Number(scheme.ot_poya_rate_per_hour) || 500,
+              epf_etf_applicable: scheme.epf_etf_applicable ?? true
+            })
+          });
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
+    const empNo = (emp.employee_number || emp.emp_no || emp.employee_id || `EMP-${Date.now()}`).toString().trim();
+    const fullName = (emp.full_name_en || emp.full_name || emp.name || 'Unnamed Employee').toString().trim();
+    let safeJoinDate = new Date().toISOString().split('T')[0];
+    if (emp.join_date) {
+      const trimmed = String(emp.join_date).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        safeJoinDate = trimmed;
+      } else {
+        const parsed = Date.parse(trimmed);
+        if (!isNaN(parsed)) safeJoinDate = new Date(parsed).toISOString().split('T')[0];
+      }
+    }
+
+    let payload: Record<string, any> = {
+      id: emp.id,
+      employee_number: empNo,
+      full_name_en: fullName,
+      nic: emp.nic || null,
+      department: emp.department || 'Production',
+      designation: emp.designation || 'Operator',
+      join_date: safeJoinDate,
+      employment_status: emp.employment_status || 'Active',
+      epf_enabled: emp.epf_enabled ?? true,
+      etf_enabled: emp.etf_enabled ?? true,
+      ot_eligible: emp.ot_eligible ?? true,
+      salary_scheme_id: emp.salary_scheme_id || null,
+      bank_name: emp.bank_name || null,
+      bank_branch: emp.bank_branch || null,
+      bank_account_number: emp.bank_account_number || null,
+      created_at: emp.created_at || new Date().toISOString()
+    };
+
+    let res = await fetch(`${url}/rest/v1/employees`, {
+      method: 'POST',
+      headers: {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      // Auto-fallback if schema expects emp_no or full_name instead
+      if (errText.includes('employee_number') || errText.includes('full_name_en') || errText.includes('emp_no')) {
+        delete payload.employee_number;
+        delete payload.full_name_en;
+        payload.emp_no = empNo;
+        payload.full_name = fullName;
+        payload.name = fullName;
+
+        res = await fetch(`${url}/rest/v1/employees`, {
+          method: 'POST',
+          headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!res.ok) {
+        const finalErr = await res.text();
+        console.warn("Supabase server sync notice:", finalErr);
+        return { success: false, error: finalErr };
+      }
+    }
+    return { success: true };
+  } catch (err: any) {
+    console.warn("Supabase server sync exception:", err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 app.get("/api/employees", (req, res) => {
   const db = readDB();
   res.json(db.employees);
 });
 
-app.post("/api/employees", (req, res) => {
+app.post("/api/employees", async (req, res) => {
   const db = readDB();
   const newEmp = { id: "emp-" + Date.now(), created_at: new Date().toISOString(), ...req.body };
   db.employees.push(newEmp);
   writeDB(db);
-  res.json(newEmp);
+
+  // Auto-sync with Supabase in background
+  const syncResult = await syncEmployeeToSupabaseServer(newEmp, 'upsert');
+  res.json({ ...newEmp, supabase_synced: syncResult.success, supabase_error: (syncResult as any).error || null });
 });
 
-app.put("/api/employees/:id", (req, res) => {
+app.put("/api/employees/:id", async (req, res) => {
   const db = readDB();
   const idx = db.employees.findIndex(e => e.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: "Employee not found" });
   db.employees[idx] = { ...db.employees[idx], ...req.body };
   writeDB(db);
-  res.json(db.employees[idx]);
+
+  // Auto-sync with Supabase in background
+  const syncResult = await syncEmployeeToSupabaseServer(db.employees[idx], 'upsert');
+  res.json({ ...db.employees[idx], supabase_synced: syncResult.success, supabase_error: (syncResult as any).error || null });
 });
 
-app.delete("/api/employees/:id", (req, res) => {
+app.delete("/api/employees/:id", async (req, res) => {
   const db = readDB();
+  const targetEmp = db.employees.find(e => e.id === req.params.id);
   db.employees = db.employees.filter(e => e.id !== req.params.id);
   writeDB(db);
+
+  if (targetEmp) {
+    await syncEmployeeToSupabaseServer(targetEmp, 'delete');
+  }
   res.json({ success: true });
 });
 
@@ -2311,164 +2448,183 @@ CREATE POLICY "Allow authenticated access biometric logs" ON biometric_attendanc
 app.get("/api/supabase-schema", (req, res) => {
   const sql = `
 -- Supabase PostgreSQL Schema for UNIBRO SMART APPARELS - HRM & Payroll
+-- Run this in your Supabase SQL Editor (https://supabase.com/dashboard/project/_/sql)
 
+-- 1. Company Settings
 CREATE TABLE IF NOT EXISTS company_settings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_name TEXT NOT NULL,
+  id TEXT PRIMARY KEY DEFAULT 'default',
+  company_name TEXT NOT NULL DEFAULT 'UNIBRO SMART APPARELS',
   company_address TEXT,
   epf_employer_rate NUMERIC DEFAULT 12.0,
   epf_employee_rate NUMERIC DEFAULT 8.0,
   etf_employer_rate NUMERIC DEFAULT 3.0,
   standard_working_days INT DEFAULT 25,
+  supabase_url TEXT,
+  supabase_anon_key TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS profiles (
-  id UUID PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  name TEXT NOT NULL,
-  role TEXT CHECK (role IN ('admin', 'hr', 'payroll')) DEFAULT 'hr',
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
+-- 2. Salary Schemes
 CREATE TABLE IF NOT EXISTS salary_schemes (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  basic_salary NUMERIC NOT NULL,
-  fixed_allowance_25_days NUMERIC NOT NULL,
-  deduct_day_1 NUMERIC DEFAULT 1000,
-  deduct_day_2 NUMERIC DEFAULT 1500,
-  deduct_day_3 NUMERIC DEFAULT 2000,
-  deduct_day_4 NUMERIC DEFAULT 2500,
-  deduct_additional_day NUMERIC DEFAULT 3000,
+  basic_salary NUMERIC NOT NULL DEFAULT 35000,
+  fixed_allowance_25_days NUMERIC NOT NULL DEFAULT 0,
+  deduct_day_1 NUMERIC DEFAULT 0,
+  deduct_day_2 NUMERIC DEFAULT 0,
+  deduct_day_3 NUMERIC DEFAULT 0,
+  deduct_day_4 NUMERIC DEFAULT 0,
+  deduct_additional_day NUMERIC DEFAULT 0,
   ot_normal_rate_per_hour NUMERIC DEFAULT 250,
   ot_off_rate_per_hour NUMERIC DEFAULT 350,
   ot_poya_rate_per_hour NUMERIC DEFAULT 500,
   incentive_type TEXT DEFAULT 'Manufacturing',
   default_incentive_amount NUMERIC DEFAULT 5000,
   epf_etf_applicable BOOLEAN DEFAULT TRUE,
+  budgetary_relief NUMERIC DEFAULT 0,
+  bra_allowance NUMERIC DEFAULT 0,
+  epf_applicable_allowances NUMERIC DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 3. Employees
 CREATE TABLE IF NOT EXISTS employees (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   employee_number TEXT UNIQUE NOT NULL,
   full_name_en TEXT NOT NULL,
   full_name_ta TEXT,
   full_name_si TEXT,
-  nic TEXT UNIQUE NOT NULL,
-  department TEXT NOT NULL,
-  designation TEXT NOT NULL,
-  join_date DATE NOT NULL,
+  nic TEXT,
+  department TEXT NOT NULL DEFAULT 'Production',
+  designation TEXT NOT NULL DEFAULT 'Operator',
+  join_date DATE NOT NULL DEFAULT CURRENT_DATE,
   employment_status TEXT DEFAULT 'Active',
   epf_enabled BOOLEAN DEFAULT TRUE,
   etf_enabled BOOLEAN DEFAULT TRUE,
   ot_eligible BOOLEAN DEFAULT TRUE,
-  salary_scheme_id UUID REFERENCES salary_schemes(id),
+  salary_scheme_id TEXT,
   bank_name TEXT,
   bank_branch TEXT,
   bank_account_number TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS attendance (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
-  month TEXT NOT NULL, -- YYYY-MM
-  working_days INT DEFAULT 25,
-  days_attended INT NOT NULL,
-  no_pay_leave_days INT DEFAULT 0,
-  paid_leave_days INT DEFAULT 0,
-  UNIQUE(employee_id, month)
+-- Ensure compatibility for emp_no and employee_number naming variations
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS emp_no TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS employee_number TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS full_name TEXT;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS name TEXT;
+
+DO $$
+BEGIN
+  ALTER TABLE IF EXISTS employees ALTER COLUMN emp_no DROP NOT NULL;
+  ALTER TABLE IF EXISTS employees ALTER COLUMN employee_number DROP NOT NULL;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+
+UPDATE employees SET emp_no = COALESCE(emp_no, employee_number) WHERE emp_no IS NULL AND employee_number IS NOT NULL;
+UPDATE employees SET employee_number = COALESCE(employee_number, emp_no) WHERE employee_number IS NULL AND emp_no IS NOT NULL;
+
+-- In case tables were previously created with UUID, convert columns to TEXT smoothly:
+DO $$
+BEGIN
+  ALTER TABLE IF EXISTS employees ALTER COLUMN id TYPE TEXT;
+  ALTER TABLE IF EXISTS employees ALTER COLUMN salary_scheme_id TYPE TEXT;
+  ALTER TABLE IF EXISTS salary_schemes ALTER COLUMN id TYPE TEXT;
+EXCEPTION WHEN OTHERS THEN
+  NULL;
+END $$;
+
+-- 4. Biometric Hardware Devices & Mappings
+CREATE TABLE IF NOT EXISTS biometric_devices (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  ip_address TEXT NOT NULL,
+  port INT DEFAULT 80,
+  device_model TEXT DEFAULT 'DS-K1A8503MF',
+  serial_number TEXT,
+  direction TEXT DEFAULT 'BOTH',
+  sync_interval INT DEFAULT 30,
+  is_active BOOLEAN DEFAULT true,
+  status TEXT DEFAULT 'online',
+  last_sync_time TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS overtime_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
-  month TEXT NOT NULL,
-  normal_ot_hours NUMERIC DEFAULT 0,
-  off_day_ot_hours NUMERIC DEFAULT 0,
-  poya_ot_hours NUMERIC DEFAULT 0,
-  UNIQUE(employee_id, month)
+CREATE TABLE IF NOT EXISTS biometric_user_mappings (
+  id TEXT PRIMARY KEY,
+  device_id TEXT,
+  device_user_id TEXT NOT NULL,
+  employee_id TEXT NOT NULL,
+  card_number TEXT,
+  verify_type TEXT DEFAULT 'fingerprint',
+  enrolled_date DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS incentive_entries (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  employee_id UUID REFERENCES employees(id) ON DELETE CASCADE,
-  month TEXT NOT NULL,
-  target_achieved_pct NUMERIC DEFAULT 100,
-  incentive_amount NUMERIC DEFAULT 0,
-  notes TEXT,
-  UNIQUE(employee_id, month)
+CREATE TABLE IF NOT EXISTS biometric_attendance_logs (
+  id TEXT PRIMARY KEY,
+  device_id TEXT,
+  device_user_id TEXT NOT NULL,
+  employee_id TEXT,
+  timestamp TIMESTAMPTZ NOT NULL,
+  verify_mode TEXT DEFAULT 'fingerprint',
+  punch_type TEXT DEFAULT 'check_in',
+  synced_to_payroll BOOLEAN DEFAULT false,
+  raw_payload JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 5. Payroll Runs
 CREATE TABLE IF NOT EXISTS payroll_runs (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  month TEXT UNIQUE NOT NULL,
+  id TEXT PRIMARY KEY,
+  month TEXT NOT NULL,
   status TEXT DEFAULT 'Draft',
-  total_basic NUMERIC,
-  total_allowances NUMERIC,
-  total_ot NUMERIC,
-  total_incentives NUMERIC,
-  total_deductions NUMERIC,
-  total_epf_employee NUMERIC,
-  total_epf_employer NUMERIC,
-  total_etf_employer NUMERIC,
-  total_net NUMERIC,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  locked_at TIMESTAMPTZ
+  is_locked BOOLEAN DEFAULT false,
+  calculated_at TIMESTAMPTZ DEFAULT NOW(),
+  employee_count INT DEFAULT 0,
+  total_gross_pay NUMERIC DEFAULT 0,
+  total_net_pay NUMERIC DEFAULT 0,
+  total_epf_employee NUMERIC DEFAULT 0,
+  total_epf_employer NUMERIC DEFAULT 0,
+  total_etf_employer NUMERIC DEFAULT 0,
+  items JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS payroll_items (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  payroll_run_id UUID REFERENCES payroll_runs(id) ON DELETE CASCADE,
-  employee_id UUID REFERENCES employees(id),
-  employee_number TEXT,
-  full_name_en TEXT,
-  full_name_ta TEXT,
-  full_name_si TEXT,
-  department TEXT,
-  designation TEXT,
-  nic TEXT,
-  bank_details TEXT,
-  basic_salary NUMERIC,
-  days_attended INT,
-  no_pay_leave_days INT,
-  basic_earned NUMERIC,
-  fixed_allowance_earned NUMERIC,
-  allowance_deduction NUMERIC,
-  no_pay_deduction NUMERIC,
-  ot_amount NUMERIC,
-  incentive_amount NUMERIC,
-  gross_earnings NUMERIC,
-  employee_epf_8 NUMERIC,
-  employer_epf_12 NUMERIC,
-  employer_etf_3 NUMERIC,
-  total_deductions NUMERIC,
-  net_salary NUMERIC
-);
-
--- Row Level Security (RLS) Enablement
+-- 6. Enable Row Level Security (RLS) and grant permissive access policies
 ALTER TABLE company_settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE salary_schemes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE employees ENABLE ROW LEVEL SECURITY;
-ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE overtime_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE incentive_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE biometric_devices ENABLE ROW LEVEL SECURITY;
+ALTER TABLE biometric_user_mappings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE biometric_attendance_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payroll_runs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payroll_items ENABLE ROW LEVEL SECURITY;
 
--- Basic RLS Policies (Allow authenticated users full access for demo/applet)
-CREATE POLICY "Allow all authenticated access" ON employees FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access schemes" ON salary_schemes FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access attendance" ON attendance FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access ot" ON overtime_entries FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access incentives" ON incentive_entries FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access runs" ON payroll_runs FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access items" ON payroll_items FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access settings" ON company_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "Allow all authenticated access profiles" ON profiles FOR ALL TO authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow full access company_settings" ON company_settings;
+CREATE POLICY "Allow full access company_settings" ON company_settings FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow full access salary_schemes" ON salary_schemes;
+CREATE POLICY "Allow full access salary_schemes" ON salary_schemes FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow full access employees" ON employees;
+CREATE POLICY "Allow full access employees" ON employees FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow full access biometric_devices" ON biometric_devices;
+CREATE POLICY "Allow full access biometric_devices" ON biometric_devices FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow full access biometric_user_mappings" ON biometric_user_mappings;
+CREATE POLICY "Allow full access biometric_user_mappings" ON biometric_user_mappings FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow full access biometric_attendance_logs" ON biometric_attendance_logs;
+CREATE POLICY "Allow full access biometric_attendance_logs" ON biometric_attendance_logs FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow full access payroll_runs" ON payroll_runs;
+CREATE POLICY "Allow full access payroll_runs" ON payroll_runs FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. Grant access to standard roles
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
 `;
   res.setHeader("Content-Type", "text/plain");
   res.send(sql);

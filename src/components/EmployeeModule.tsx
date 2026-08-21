@@ -1,10 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Employee, SalaryScheme, Language } from '../types';
 import { translations } from '../translations';
-import { UserPlus, Search, Edit2, Trash2, X, Check, Building, CreditCard, Users, AlertCircle } from 'lucide-react';
+import { 
+  UserPlus, Search, Edit2, Trash2, X, Check, Building, CreditCard, 
+  Users, AlertCircle, Cloud, CloudOff, RefreshCw, Database, 
+  Code, Copy, CheckCircle2, AlertTriangle, ArrowDownToLine, ArrowUpToLine
+} from 'lucide-react';
 import { ReportToolbar } from './ReportToolbar';
 import { exportToExcel, exportToPdf, printReport } from '../utils/exportUtils';
 import { defaultSalarySchemes } from '../utils/clientDb';
+import { 
+  saveEmployeeToSupabase, 
+  deleteEmployeeFromSupabase, 
+  fetchEmployeesFromSupabase, 
+  syncAllDataToSupabase, 
+  getSupabaseConfig, 
+  testSupabaseConnection,
+  SUPABASE_MIGRATION_SQL
+} from '../utils/supabaseClient';
 
 interface EmployeeModuleProps {
   language: Language;
@@ -18,6 +31,12 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
+  const [supabaseWarning, setSupabaseWarning] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [supabaseStatus, setSupabaseStatus] = useState<{ configured: boolean; connected?: boolean; message?: string }>({ configured: false });
+  const [showSqlHelp, setShowSqlHelp] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Employee>>({
@@ -42,7 +61,23 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
   useEffect(() => {
     fetchEmployees();
     fetchSchemes();
+    checkSupabaseStatus();
   }, []);
+
+  const checkSupabaseStatus = async () => {
+    const cfg = getSupabaseConfig();
+    if (!cfg.configured) {
+      setSupabaseStatus({ configured: false, message: 'Offline / Local storage mode' });
+      return;
+    }
+    setSupabaseStatus({ configured: true, message: 'Checking Supabase...' });
+    const res = await testSupabaseConnection();
+    setSupabaseStatus({
+      configured: true,
+      connected: res.connected,
+      message: res.message
+    });
+  };
 
   const fetchEmployees = async () => {
     try {
@@ -76,14 +111,18 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
+    setSupabaseWarning(null);
+
     try {
       const activeSchemes = schemes.length > 0 ? schemes : defaultSalarySchemes;
       const finalSchemeId = formData.salary_scheme_id || activeSchemes[0]?.id || 'sch-1';
-      const payload = {
+      const payload: Partial<Employee> = {
         ...formData,
         salary_scheme_id: finalSchemeId
       };
 
+      // 1. Save to local/backend endpoint
       const url = editingEmp ? `/api/employees/${editingEmp.id}` : '/api/employees';
       const method = editingEmp ? 'PUT' : 'POST';
       const res = await fetch(url, {
@@ -92,16 +131,68 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
         body: JSON.stringify(payload)
       });
 
+      let savedEmp = payload as Employee;
       if (res.ok) {
-        setSaveStatus(editingEmp ? 'Employee updated successfully!' : 'Employee registered successfully!');
-        setTimeout(() => setSaveStatus(null), 3000);
-        setIsModalOpen(false);
-        setEditingEmp(null);
-        await fetchEmployees();
+        try {
+          const resData = await res.json();
+          if (resData && resData.id) {
+            savedEmp = resData;
+          }
+        } catch {
+          // ignore json parse error
+        }
       }
-    } catch (err) {
+
+      // 2. Explicitly persist to Supabase if configured
+      const cfg = getSupabaseConfig();
+      let supabaseMessage = '';
+
+      if (cfg.configured) {
+        const empToSync: Employee = {
+          id: savedEmp.id || editingEmp?.id || `emp-${Date.now()}`,
+          employee_number: payload.employee_number || `NL-${String(employees.length + 1).padStart(3, '0')}`,
+          full_name_en: payload.full_name_en || '',
+          full_name_ta: payload.full_name_ta || '',
+          full_name_si: payload.full_name_si || '',
+          nic: payload.nic || '',
+          department: payload.department || 'Production',
+          designation: payload.designation || 'Operator',
+          join_date: payload.join_date || new Date().toISOString().split('T')[0],
+          employment_status: payload.employment_status || 'Active',
+          epf_enabled: payload.epf_enabled ?? true,
+          etf_enabled: payload.etf_enabled ?? true,
+          ot_eligible: payload.ot_eligible ?? true,
+          salary_scheme_id: finalSchemeId,
+          bank_name: payload.bank_name || 'Commercial Bank',
+          bank_branch: payload.bank_branch || 'Colombo 03',
+          bank_account_number: payload.bank_account_number || '',
+          created_at: editingEmp?.created_at || new Date().toISOString()
+        };
+
+        const supResult = await saveEmployeeToSupabase(empToSync);
+        if (supResult.success) {
+          supabaseMessage = ' & synchronized with Supabase Cloud Database!';
+          setSupabaseWarning(null);
+        } else {
+          setSupabaseWarning(
+            `Saved locally, but Supabase Cloud sync returned: ${supResult.error || 'Check SQL schema & RLS policies.'}`
+          );
+        }
+      }
+
+      setSaveStatus(
+        (editingEmp ? 'Employee updated successfully!' : 'Employee registered successfully!') + supabaseMessage
+      );
+      setTimeout(() => setSaveStatus(null), 5000);
+      setIsModalOpen(false);
+      setEditingEmp(null);
+      await fetchEmployees();
+      checkSupabaseStatus();
+    } catch (err: any) {
       console.error("Error saving employee:", err);
-      alert('Error saving employee. Please try again.');
+      alert(`Error saving employee: ${err.message || 'Please try again.'}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -109,9 +200,60 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
     if (!confirm('Are you sure you want to delete this employee?')) return;
     try {
       await fetch(`/api/employees/${id}`, { method: 'DELETE' });
+      const cfg = getSupabaseConfig();
+      if (cfg.configured) {
+        await deleteEmployeeFromSupabase(id);
+      }
       fetchEmployees();
+      setSaveStatus('Employee removed successfully.');
+      setTimeout(() => setSaveStatus(null), 3000);
     } catch (err) {
-      console.error(err);
+      console.error("Delete employee error:", err);
+    }
+  };
+
+  const handleSyncAll = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await syncAllDataToSupabase();
+      if (res.success) {
+        setSaveStatus(`All ${res.employeesSynced} employees and ${res.schemesSynced} schemes synchronized to Supabase!`);
+        setSupabaseWarning(null);
+      } else {
+        setSupabaseWarning(`Supabase sync notice: ${res.error || 'Check database permissions.'}`);
+      }
+      checkSupabaseStatus();
+    } catch (err: any) {
+      setSupabaseWarning(`Sync error: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSaveStatus(null), 4000);
+    }
+  };
+
+  const handlePullFromSupabase = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetchEmployeesFromSupabase();
+      if (res.success && res.data && res.data.length > 0) {
+        // Save to local backend / state
+        for (const emp of res.data) {
+          await fetch('/api/employees', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(emp)
+          });
+        }
+        await fetchEmployees();
+        setSaveStatus(`Loaded ${res.data.length} employees from Supabase Cloud!`);
+      } else {
+        setSaveStatus('No employees found in Supabase or Supabase is empty.');
+      }
+    } catch (err: any) {
+      setSupabaseWarning(`Could not pull from Supabase: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+      setTimeout(() => setSaveStatus(null), 4000);
     }
   };
 
@@ -330,6 +472,64 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
           <p className="text-sm text-stone-500">Manage personnel records, trilingual naming, banking, and salary assignments.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          {/* Supabase Status & Sync Toolbar */}
+          <div className="flex items-center space-x-2 bg-stone-100 p-1 rounded-xl border border-stone-200 text-xs">
+            <div className="flex items-center space-x-1 px-2.5 py-1 rounded-lg font-medium text-stone-700">
+              {supabaseStatus.configured ? (
+                supabaseStatus.connected ? (
+                  <span className="flex items-center text-emerald-700">
+                    <Cloud className="w-3.5 h-3.5 text-emerald-600 mr-1.5" />
+                    Supabase Cloud Active
+                  </span>
+                ) : (
+                  <span className="flex items-center text-amber-700">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 mr-1.5" />
+                    Supabase Configured
+                  </span>
+                )
+              ) : (
+                <span className="flex items-center text-stone-500">
+                  <CloudOff className="w-3.5 h-3.5 text-stone-400 mr-1.5" />
+                  Local Storage
+                </span>
+              )}
+            </div>
+
+            {supabaseStatus.configured && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSyncAll}
+                  disabled={isSyncing}
+                  title="Push all local employees and schemes to Supabase"
+                  className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-stone-200 rounded-lg font-semibold flex items-center space-x-1 transition shadow-2xs cursor-pointer"
+                >
+                  <ArrowUpToLine className={`w-3.5 h-3.5 ${isSyncing ? 'animate-bounce' : ''}`} />
+                  <span>Sync to Cloud</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePullFromSupabase}
+                  disabled={isSyncing}
+                  title="Pull cloud employees into local database"
+                  className="px-2.5 py-1 bg-white hover:bg-stone-50 text-stone-700 border border-stone-200 rounded-lg font-semibold flex items-center space-x-1 transition shadow-2xs cursor-pointer"
+                >
+                  <ArrowDownToLine className="w-3.5 h-3.5 text-stone-500" />
+                  <span>Pull</span>
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowSqlHelp(true)}
+              title="View Supabase PostgreSQL Schema & RLS Fix"
+              className="p-1 text-stone-500 hover:text-emerald-700 hover:bg-stone-200 rounded-lg transition"
+            >
+              <Code className="w-4 h-4" />
+            </button>
+          </div>
+
           <ReportToolbar
             onExportExcel={handleExportExcel}
             onExportPdf={handleExportPdf}
@@ -346,6 +546,39 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
           </button>
         </div>
       </div>
+
+      {/* Supabase Diagnostic / Warning Toast */}
+      {supabaseWarning && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 flex items-start justify-between shadow-xs">
+          <div className="flex items-start space-x-3 text-xs">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm">Supabase Cloud Sync Notice</p>
+              <p className="mt-0.5 text-amber-800">{supabaseWarning}</p>
+              <div className="mt-2 flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowSqlHelp(true)}
+                  className="font-bold text-amber-900 underline hover:text-amber-700 cursor-pointer"
+                >
+                  Click to View & Copy Supabase SQL Schema / RLS Fix
+                </button>
+                <span>&bull;</span>
+                <button
+                  type="button"
+                  onClick={handleSyncAll}
+                  className="font-bold text-amber-900 underline hover:text-amber-700 cursor-pointer"
+                >
+                  Retry Sync Now
+                </button>
+              </div>
+            </div>
+          </div>
+          <button onClick={() => setSupabaseWarning(null)} className="text-amber-700 hover:text-amber-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Save Status Toast */}
       {saveStatus && (
@@ -672,12 +905,67 @@ export const EmployeeModule: React.FC<EmployeeModuleProps> = ({ language }) => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium shadow-xs cursor-pointer"
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-medium shadow-xs cursor-pointer flex items-center space-x-2"
                 >
-                  {t.save}
+                  {isSaving && <RefreshCw className="w-3.5 h-3.5 animate-spin mr-1" />}
+                  <span>{t.save}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Supabase SQL DDL / Quick Fix Modal */}
+      {showSqlHelp && (
+        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+          <div className="bg-stone-900 text-stone-100 rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-stone-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Database className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-base font-bold text-white">Supabase PostgreSQL Quick Migration & Fix</h3>
+              </div>
+              <button
+                onClick={() => setShowSqlHelp(false)}
+                className="text-stone-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-300">
+              If Supabase returns <code className="text-emerald-400 font-mono">column ... does not exist</code> or <code className="text-emerald-400 font-mono">42501 (permission denied)</code>, copy and run this non-destructive SQL script in your Supabase SQL Editor:
+            </p>
+
+            <div className="relative">
+              <pre className="bg-stone-950 p-4 rounded-xl font-mono text-[11px] text-emerald-300/90 overflow-x-auto max-h-64 border border-stone-800 whitespace-pre">
+{SUPABASE_MIGRATION_SQL}
+              </pre>
+
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(SUPABASE_MIGRATION_SQL);
+                  setCopiedSql(true);
+                  setTimeout(() => setCopiedSql(false), 3000);
+                }}
+                className="absolute top-3 right-3 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-semibold flex items-center space-x-1.5 border border-stone-700 transition cursor-pointer"
+              >
+                {copiedSql ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedSql ? 'Copied to Clipboard!' : 'Copy SQL'}</span>
+              </button>
+            </div>
+
+            <div className="flex justify-end space-x-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSqlHelp(false)}
+                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
